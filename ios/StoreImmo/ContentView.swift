@@ -39,6 +39,12 @@ struct ContentView: View {
         .task {
             await notificationService.refreshAuthorizationStatus()
         }
+        .sheet(isPresented: Binding(
+            get: { viewModel.pendingOTPEmail != nil },
+            set: { if !$0 { viewModel.cancelOTP() } }
+        )) {
+            OTPVerificationView()
+        }
     }
 }
 
@@ -410,25 +416,20 @@ private struct AuthenticationFlowView: View {
                     }
 
                     VStack(spacing: 12) {
-                        Button { viewModel.completeAuthentication() } label: { LoginButtonView(title: "Continuer avec Email", symbolName: "envelope.fill") }
-                        Button { viewModel.completeAuthentication() } label: { LoginButtonView(title: "Continuer avec Téléphone", symbolName: "phone.fill") }
-                        Button { viewModel.completeAuthentication() } label: { LoginButtonView(title: "Continuer avec Google", symbolName: "globe") }
-                        Button { viewModel.completeAuthentication() } label: { LoginButtonView(title: "Continuer avec Apple", symbolName: "apple.logo") }
-                    }
-                    .buttonStyle(.plain)
+                        Button {
+                            viewModel.completeAuthentication()
+                        } label: {
+                            LoginButtonView(title: "Créer un compte", symbolName: "person.badge.plus")
+                        }
+                        .buttonStyle(.plain)
 
-                    if role == .agent {
-                        AgentVerificationFormView()
-                    } else {
-                        SellerFastPostPreviewView()
+                        NavigationLink {
+                            LoginExistingAccountView(role: role)
+                        } label: {
+                            LoginButtonView(title: "Déjà inscrit ? Se connecter", symbolName: "arrow.right.circle")
+                        }
+                        .buttonStyle(.plain)
                     }
-
-                    Button(role == .agent ? "Continuer vers l’onboarding agent" : "Entrer dans l’application") {
-                        viewModel.completeAuthentication()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .frame(maxWidth: .infinity)
-                    .controlSize(.large)
 
                     Button("Retour") {
                         viewModel.selectedRole = nil
@@ -516,7 +517,7 @@ private struct AgentProfileOnboardingView: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    DashboardTopCardView(title: "Créez votre profil agent", subtitle: "Étape obligatoire avant d’accéder aux biens, candidatures et mandats.")
+                    DashboardTopCardView(title: "Créez votre profil agent", subtitle: "Étape obligatoire avant d'accéder aux biens, candidatures et mandats.")
                     VStack(spacing: 12) {
                         HStack(spacing: 14) {
                             Image(systemName: viewModel.agentOnboardingDraft.photoSymbol)
@@ -527,7 +528,7 @@ private struct AgentProfileOnboardingView: View {
                             VStack(alignment: .leading, spacing: 6) {
                                 Text("Photo de profil")
                                     .font(.headline)
-                                Text("Avatar de démonstration, prêt pour Supabase Storage.")
+                                Text("Photo de profil (symbole)")
                                     .font(.footnote)
                                     .foregroundStyle(.secondary)
                             }
@@ -561,7 +562,7 @@ private struct AgentProfileOnboardingView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
-                    .disabled(!viewModel.agentOnboardingDraft.isComplete)
+                    .disabled(!viewModel.agentOnboardingDraft.isComplete || viewModel.isCheckingAccount)
                     NavigationLink {
                         LoginExistingAccountView(role: .agent)
                     } label: {
@@ -629,7 +630,7 @@ private struct SellerOnboardingView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .controlSize(.large)
-                    .disabled(!viewModel.sellerOnboardingDraft.isComplete)
+                    .disabled(!viewModel.sellerOnboardingDraft.isComplete || viewModel.isCheckingAccount)
                     NavigationLink {
                         LoginExistingAccountView(role: .seller)
                     } label: {
@@ -666,7 +667,7 @@ private struct LoginExistingAccountView: View {
             VStack(alignment: .leading, spacing: 18) {
                 DashboardTopCardView(
                     title: role == .seller ? "Connexion vendeur" : "Connexion agent",
-                    subtitle: "Connectez-vous avec l’email et le téléphone utilisés lors de votre inscription."
+                    subtitle: "Connectez-vous avec l'email et le téléphone utilisés lors de votre inscription."
                 )
 
                 VStack(spacing: 12) {
@@ -694,14 +695,13 @@ private struct LoginExistingAccountView: View {
                         email: email,
                         phone: phone
                     )
-                    dismiss()
                 } label: {
                     Label("Se connecter", systemImage: "arrow.right.circle.fill")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
-                .disabled(!canLogin)
+                .disabled(!canLogin || viewModel.isCheckingAccount)
 
                 Button("Pas encore inscrit ? Créer un compte") {
                     dismiss()
@@ -713,6 +713,9 @@ private struct LoginExistingAccountView: View {
         }
         .navigationTitle("Connexion")
         .navigationBarTitleDisplayMode(.inline)
+        .onChange(of: viewModel.isAuthenticated) { _, isAuth in
+            if isAuth { dismiss() }
+        }
     }
 }
 
@@ -720,28 +723,95 @@ private struct SellerRootView: View {
     @Environment(AppViewModel.self) private var viewModel
 
     var body: some View {
-        TabView(selection: Binding(get: { viewModel.sellerTab }, set: { viewModel.sellerTab = $0 })) {
-            Tab("Accueil", systemImage: "house", value: .dashboard) {
-                NavigationStack {
-                    SellerDashboardView()
+        @Bindable var viewModel = viewModel
+        ZStack(alignment: .top) {
+            TabView(selection: $viewModel.sellerTab) {
+                Tab("Accueil", systemImage: "house", value: .dashboard) {
+                    NavigationStack {
+                        SellerDashboardView()
+                    }
                 }
+                .badge(viewModel.unreadApplicationCount > 0 ? viewModel.unreadApplicationCount : 0)
+                Tab("Suivi", systemImage: "checkmark.seal", value: .mandates) {
+                    NavigationStack {
+                        SellerFollowUpView()
+                    }
+                }
+                Tab("Messages", systemImage: "bubble.left.and.bubble.right", value: .messages) {
+                    NavigationStack(path: $viewModel.sellerMessagesNavPath) {
+                        MessagingHubView()
+                    }
+                }
+                .badge(viewModel.unreadConversationCount > 0 ? viewModel.unreadConversationCount : 0)
+                Tab("Profil", systemImage: "person.crop.circle", value: .profile) {
+                    NavigationStack {
+                        ProfileSettingsView(isAgent: false)
+                    }
+                }
+                .badge(viewModel.unreadNotificationCount > 0 ? viewModel.unreadNotificationCount : 0)
             }
-            Tab("Suivi", systemImage: "checkmark.seal", value: .mandates) {
-                NavigationStack {
-                    SellerFollowUpView()
+            if let banner = viewModel.inAppBanner {
+                InAppNotificationBannerView(notification: banner) {
+                    viewModel.openFromNotification(banner)
+                    viewModel.inAppBanner = nil
+                } onDismiss: {
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        viewModel.inAppBanner = nil
+                    }
                 }
-            }
-            Tab("Messages", systemImage: "bubble.left.and.bubble.right", value: .messages) {
-                NavigationStack {
-                    MessagingHubView()
-                }
-            }
-            Tab("Profil", systemImage: "person.crop.circle", value: .profile) {
-                NavigationStack {
-                    ProfileSettingsView(isAgent: false)
-                }
+                .transition(.asymmetric(insertion: .move(edge: .top).combined(with: .opacity),
+                                        removal: .move(edge: .top).combined(with: .opacity)))
+                .zIndex(10)
+                .padding(.top, 8)
+                .sensoryFeedback(.impact, trigger: banner.id)
             }
         }
+        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: viewModel.inAppBanner?.id)
+    }
+}
+
+private struct InAppNotificationBannerView: View {
+    let notification: NotificationItem
+    let onTap: () -> Void
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: notification.symbolName)
+                .font(.title2)
+                .foregroundStyle(StoreImmoTheme.navy)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(notification.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text(notification.body)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+
+            Spacer()
+
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+        .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+        .padding(.horizontal, 16)
+        .contentShape(Rectangle())
+        .onTapGesture { onTap() }
+        .gesture(
+            DragGesture(minimumDistance: 20)
+                .onEnded { value in
+                    if value.translation.height < -20 {
+                        withAnimation(.easeOut(duration: 0.3)) { onDismiss() }
+                    }
+                }
+        )
     }
 }
 
@@ -749,49 +819,67 @@ private struct AgentRootView: View {
     @Environment(AppViewModel.self) private var viewModel
 
     var body: some View {
-        TabView(selection: Binding(get: { viewModel.agentTab }, set: { viewModel.agentTab = $0 })) {
-            Tab("Découvrir", systemImage: "sparkles.rectangle.stack", value: .discover) {
-                NavigationStack {
-                    AgentDiscoverFeedView()
+        @Bindable var viewModel = viewModel
+        ZStack(alignment: .top) {
+            TabView(selection: $viewModel.agentTab) {
+                Tab("Découvrir", systemImage: "sparkles.rectangle.stack", value: .discover) {
+                    NavigationStack {
+                        AgentDiscoverFeedView()
+                    }
                 }
+                Tab("Projets", systemImage: "building.2", value: .opportunities) {
+                    NavigationStack {
+                        AgentDashboardView()
+                    }
+                }
+                Tab("Messages", systemImage: "bubble.left.and.exclamationmark.bubble.right", value: .messages) {
+                    NavigationStack(path: $viewModel.agentMessagesNavPath) {
+                        MessagingHubView()
+                    }
+                }
+                .badge(viewModel.unreadConversationCount > 0 ? viewModel.unreadConversationCount : 0)
+                Tab("Profil", systemImage: "person.badge.shield.checkmark", value: .profile) {
+                    NavigationStack {
+                        ProfileSettingsView(isAgent: true)
+                    }
+                }
+                .badge(viewModel.unreadNotificationCount > 0 ? viewModel.unreadNotificationCount : 0)
             }
-            Tab("Projets", systemImage: "building.2", value: .opportunities) {
-                NavigationStack {
-                    AgentDashboardView()
+            if let banner = viewModel.inAppBanner {
+                InAppNotificationBannerView(notification: banner) {
+                    viewModel.openFromNotification(banner)
+                    viewModel.inAppBanner = nil
+                } onDismiss: {
+                    withAnimation(.easeOut(duration: 0.3)) {
+                        viewModel.inAppBanner = nil
+                    }
                 }
-            }
-            Tab("Messages", systemImage: "bubble.left.and.exclamationmark.bubble.right", value: .messages) {
-                NavigationStack {
-                    MessagingHubView()
-                }
-            }
-            Tab("Profil", systemImage: "person.badge.shield.checkmark", value: .profile) {
-                NavigationStack {
-                    ProfileSettingsView(isAgent: true)
-                }
+                .transition(.asymmetric(insertion: .move(edge: .top).combined(with: .opacity),
+                                        removal: .move(edge: .top).combined(with: .opacity)))
+                .zIndex(10)
+                .padding(.top, 8)
+                .sensoryFeedback(.impact, trigger: banner.id)
             }
         }
+        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: viewModel.inAppBanner?.id)
     }
 }
 
 private struct SellerDashboardView: View {
     @Environment(AppViewModel.self) private var viewModel
-    @State private var isComposerPresented: Bool = false
 
     var body: some View {
+        @Bindable var viewModel = viewModel
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                DashboardTopCardView(title: "Bonjour \(viewModel.sellerPublicFirstName)", subtitle: "Vos projets actifs et les meilleures candidatures du moment.")
+                DashboardTopCardView(title: "Bonjour \(viewModel.sellerPublicFirstName)", subtitle: "Comparez les profils, choisissez votre expert, vendez sereinement.")
 
                 Button {
-                    isComposerPresented = true
+                    viewModel.showSellerComposerSheet = true
                 } label: {
-                    HStack {
-                        Image(systemName: "plus.circle.fill")
-                        Text("Déposer un projet de vente")
-                            .fontWeight(.semibold)
-                        Spacer()
-                    }
+                    Label("Déposer un projet de vente", systemImage: "plus.circle.fill")
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.large)
@@ -799,11 +887,37 @@ private struct SellerDashboardView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Mes projets")
                         .font(.title3.bold())
-                    ForEach(viewModel.sellerProjects) { project in
-                        NavigationLink(value: project.id) {
-                            ProjectSummaryCardView(project: project)
+                    ForEach(viewModel.sortedSellerProjects) { project in
+                        VStack(spacing: 0) {
+                            NavigationLink(value: project.id) {
+                                ProjectSummaryCardView(project: project)
+                            }
+                            .buttonStyle(.plain)
+
+                            HStack {
+                                Spacer()
+                                Menu {
+                                    Button {
+                                        viewModel.editingProject = project
+                                    } label: {
+                                        Label("Modifier", systemImage: "pencil")
+                                    }
+                                    Divider()
+                                    Button(role: .destructive) {
+                                        viewModel.projectToDelete = project
+                                    } label: {
+                                        Label("Supprimer", systemImage: "trash")
+                                    }
+                                } label: {
+                                    Label("Gérer", systemImage: "ellipsis.circle")
+                                        .font(.footnote.weight(.medium))
+                                        .foregroundStyle(.secondary)
+                                        .padding(.vertical, 8)
+                                        .padding(.horizontal, 4)
+                                }
+                            }
+                            .padding(.horizontal, 4)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -815,10 +929,26 @@ private struct SellerDashboardView: View {
                 SellerProjectDetailView(project: project)
             }
         }
-        .sheet(isPresented: $isComposerPresented) {
+        .sheet(isPresented: $viewModel.showSellerComposerSheet) {
             SellerProjectComposerView()
                 .presentationDetents([.large])
                 .presentationContentInteraction(.scrolls)
+        }
+        .sheet(item: $viewModel.editingProject) { project in
+            SellerProjectEditorView(project: project)
+                .presentationDetents([.large])
+                .presentationContentInteraction(.scrolls)
+        }
+        .alert("Supprimer ce projet ?", isPresented: Binding(
+            get: { viewModel.projectToDelete != nil },
+            set: { if !$0 { viewModel.projectToDelete = nil } }
+        )) {
+            Button("Annuler", role: .cancel) { viewModel.projectToDelete = nil }
+            Button("Supprimer", role: .destructive) {
+                if let p = viewModel.projectToDelete { viewModel.archiveProject(p) }
+            }
+        } message: {
+            Text("Cette action est définitive. Les candidatures et conversations liées à ce projet pourront être supprimées ou archivées.")
         }
     }
 }
@@ -846,9 +976,6 @@ private struct AgentDashboardView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
-                Text("Mes projets")
-                    .font(.largeTitle.bold())
-
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Text("Mes candidatures")
@@ -903,7 +1030,7 @@ private struct AgentDashboardView: View {
             }
             .padding(20)
         }
-        .navigationTitle("Projets")
+        .navigationTitle("Mes projets")
         .navigationDestination(for: UUID.self) { projectID in
             if let project = viewModel.discoverFeedProjects.first(where: { $0.id == projectID }) ?? viewModel.sellerProjects.first(where: { $0.id == projectID }) {
                 AgentProjectDetailView(project: project)
@@ -916,22 +1043,23 @@ private struct AgentDiscoverFeedView: View {
     @Environment(AppViewModel.self) private var viewModel
     @Environment(StoreImmoNotificationService.self) private var notificationService
     @State private var selectedProject: PropertyProject?
-    @State private var galleryProject: PropertyProject?
+    @State private var showingSavedProjects = false
+    @State private var showingVisibleProjects = false
 
     var body: some View {
+        @Bindable var viewModel = viewModel
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
-                DiscoverFeedHeroView()
+                DiscoverFeedHeroView(
+                    onVisibleTap: { showingVisibleProjects = true },
+                    onSavedTap: { showingSavedProjects = true }
+                )
 
                 LazyVStack(spacing: 18, pinnedViews: [.sectionHeaders]) {
                     Section {
                         ForEach(viewModel.discoverFeedProjects) { project in
-                            DiscoverPropertyCardView(project: project, onOpen: {
+                            CleanAgentProjectCardView(project: project, onOpen: {
                                 selectedProject = project
-                            }, onApply: {
-                                selectedProject = project
-                            }, onGallery: {
-                                galleryProject = project
                             })
                             .onAppear {
                                 viewModel.loadMoreDiscoverProjectsIfNeeded(currentProject: project)
@@ -957,7 +1085,7 @@ private struct AgentDiscoverFeedView: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshable {
             await notificationService.requestAuthorizationIfNeeded()
-            let newProject = viewModel.refreshDiscoverFeed()
+            let newProject = await viewModel.refreshDiscoverFeed()
             if let newProject {
                 await notificationService.scheduleSectorAlert(for: newProject)
             }
@@ -968,14 +1096,177 @@ private struct AgentDiscoverFeedView: View {
                 .presentationDragIndicator(.visible)
                 .presentationContentInteraction(.scrolls)
         }
-        .fullScreenCover(item: $galleryProject) { project in
-            PropertyGalleryFullScreenView(project: project)
+        .sheet(isPresented: $viewModel.showSubscriptionUpgradeSheet) {
+            SubscriptionUpgradePromptView()
+                .presentationDetents([.medium])
+        }
+        .sheet(isPresented: $showingSavedProjects) {
+            SavedProjectsSheetView()
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showingVisibleProjects) {
+            VisibleProjectsSheetView()
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+    }
+}
+
+private struct SavedProjectsSheetView: View {
+    @Environment(AppViewModel.self) private var viewModel
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if viewModel.savedDiscoverProjects.isEmpty {
+                    ContentUnavailableView {
+                        Label("Aucun bien sauvegarde", systemImage: "heart")
+                    } description: {
+                        Text("Appuyez sur le coeur d un bien pour le sauvegarder.")
+                    }
+                } else {
+                    List(viewModel.savedDiscoverProjects) { project in
+                        HStack(spacing: 12) {
+                            Image(systemName: "house.fill")
+                                .font(.title3)
+                                .foregroundStyle(StoreImmoTheme.navy)
+                                .frame(width: 40, height: 40)
+                                .background(StoreImmoTheme.mist, in: .circle)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(project.title)
+                                    .font(.headline)
+                                Text(project.city)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Button {
+                                viewModel.toggleSavedProject(project)
+                            } label: {
+                                Image(systemName: "heart.fill")
+                                    .foregroundStyle(.red)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .listStyle(.insetGrouped)
+                }
+            }
+            .navigationTitle("Biens sauvegardes")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+
+private struct VisibleProjectsSheetView: View {
+    @Environment(AppViewModel.self) private var viewModel
+
+    var body: some View {
+        NavigationStack {
+            Group {
+                if viewModel.discoverFeedProjects.isEmpty {
+                    ContentUnavailableView {
+                        Label("Aucun bien dans ce secteur", systemImage: "location.slash")
+                    } description: {
+                        Text("Elargissez votre rayon ou passez en France entiere.")
+                    }
+                } else {
+                    List(viewModel.discoverFeedProjects) { project in
+                        HStack(spacing: 12) {
+                            Image(systemName: "house.fill")
+                                .font(.title3)
+                                .foregroundStyle(StoreImmoTheme.navy)
+                                .frame(width: 40, height: 40)
+                                .background(StoreImmoTheme.mist, in: .circle)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(project.title)
+                                    .font(.headline)
+                                    .lineLimit(1)
+                                Text(project.city)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            if viewModel.hasApplied(to: project) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.blue)
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    .listStyle(.insetGrouped)
+                }
+            }
+            .navigationTitle("Biens visibles")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+
+private struct SubscriptionUpgradePromptView: View {
+    @Environment(AppViewModel.self) private var viewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var showPlans = false
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 28) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Label("Candidature gratuite utilisée", systemImage: "sparkles")
+                        .font(.title2.bold())
+                    Text("Vous avez utilisé votre candidature gratuite. Souscrivez un abonnement pour continuer à candidater à de nouveaux projets.")
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                VStack(spacing: 12) {
+                    Button {
+                        showPlans = true
+                    } label: {
+                        Label("Voir les offres", systemImage: "crown.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+
+                    Button("Plus tard") {
+                        viewModel.showSubscriptionUpgradeSheet = false
+                        dismiss()
+                    }
+                    .buttonStyle(.bordered)
+                    .frame(maxWidth: .infinity)
+                    .controlSize(.large)
+                }
+
+                Spacer()
+            }
+            .padding(28)
+            .navigationDestination(isPresented: $showPlans) {
+                SubscriptionPlansView(showsCloseButton: true)
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        viewModel.showSubscriptionUpgradeSheet = false
+                        dismiss()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
         }
     }
 }
 
 private struct DiscoverFeedHeroView: View {
     @Environment(AppViewModel.self) private var viewModel
+    var onVisibleTap: () -> Void = {}
+    var onSavedTap: () -> Void = {}
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -1002,17 +1293,46 @@ private struct DiscoverFeedHeroView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(.white.opacity(0.14), in: .capsule)
-                Label("Galerie plein écran", systemImage: "rectangle.on.rectangle")
+                Label("Galerie plein ecran", systemImage: "rectangle.on.rectangle")
                     .font(.footnote.weight(.semibold))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(.white.opacity(0.14), in: .capsule)
             }
 
+            if !viewModel.isAgentSubscriptionActive {
+                Label(
+                    viewModel.freeApplicationUsed
+                        ? "Candidature gratuite utilisée · abonnement requis"
+                        : "Votre première candidature est offerte",
+                    systemImage: viewModel.freeApplicationUsed ? "lock.fill" : "gift.fill"
+                )
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(
+                    viewModel.freeApplicationUsed ? Color.orange.opacity(0.82) : Color.white.opacity(0.20),
+                    in: .capsule
+                )
+            }
+
             HStack(spacing: 12) {
-                ProjectMetricBadgeView(value: viewModel.discoverFeedProjects.count, label: "Biens visibles")
-                ProjectMetricBadgeView(value: viewModel.savedDiscoverProjects.count, label: "Biens sauvegardés")
-                ProjectMetricBadgeView(value: Int(viewModel.radiusFilter), label: "Rayon km")
+                Button { onVisibleTap() } label: {
+                    ProjectMetricBadgeView(value: viewModel.discoverFeedProjects.count, label: "Biens visibles")
+                }
+                .buttonStyle(.plain)
+                Button { onSavedTap() } label: {
+                    ProjectMetricBadgeView(value: viewModel.savedDiscoverProjects.count, label: "Sauvegardes")
+                }
+                .buttonStyle(.plain)
+                ProjectMetricBadgeView(
+                    value: Int(viewModel.radiusFilter),
+                    label: viewModel.radiusFilter == 0 ? "Zone" : "Rayon km",
+                    valueText: viewModel.radiusFilter == 0 ? "France" : nil
+                )
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1033,13 +1353,17 @@ private struct AgentSectorOverviewCardView: View {
                 StatusBadgeView(text: viewModel.agentSectorSummary)
             }
 
-            Text("Le feed Découvrir n’affiche que les biens de votre périmètre. Changez votre ville ou votre rayon depuis le profil pour basculer vers une autre zone.")
+            Text("Le feed Découvrir n'affiche que les biens de votre périmètre. Changez votre ville ou votre rayon depuis le profil pour basculer vers une autre zone.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
             HStack(spacing: 12) {
                 ProjectMetricBadgeView(value: viewModel.discoverFeedProjects.count, label: "Biens visibles")
-                ProjectMetricBadgeView(value: Int(viewModel.radiusFilter), label: "Rayon km")
+                ProjectMetricBadgeView(
+                    value: Int(viewModel.radiusFilter),
+                    label: viewModel.radiusFilter == 0 ? "Zone" : "Rayon km",
+                    valueText: viewModel.radiusFilter == 0 ? "France" : nil
+                )
                 ProjectMetricBadgeView(value: viewModel.savedDiscoverProjects.count, label: "Sauvegardés")
             }
         }
@@ -1057,7 +1381,7 @@ private struct DiscoverFeedStickyFiltersView: View {
                     .font(.footnote.weight(.semibold))
                     .lineLimit(1)
                 Spacer(minLength: 8)
-                Text("\(Int(viewModel.radiusFilter)) km")
+                Text(viewModel.radiusFilter == 0 ? "France entière" : "\(Int(viewModel.radiusFilter)) km")
                     .font(.footnote.weight(.bold))
                     .foregroundStyle(StoreImmoTheme.navy)
                     .padding(.horizontal, 10)
@@ -1068,7 +1392,7 @@ private struct DiscoverFeedStickyFiltersView: View {
             Slider(
                 value: Binding(
                     get: {
-                        Double(viewModel.discoverRadiusOptions.firstIndex(of: Int(viewModel.radiusFilter)) ?? 3)
+                        Double(viewModel.discoverRadiusOptions.firstIndex(of: Int(viewModel.radiusFilter)) ?? 2)
                     },
                     set: { newValue in
                         let index = min(max(Int(newValue.rounded()), 0), viewModel.discoverRadiusOptions.count - 1)
@@ -1094,7 +1418,7 @@ private struct RadiusFilterSettingsBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Rayon d’intervention")
+            Text("Rayon d'intervention")
             DiscoverFeedStickyFiltersView()
                 .padding(.vertical, 4)
         }
@@ -1119,9 +1443,10 @@ private struct DiscoverPropertyGalleryPreview: View {
                     PropertyGallerySlideView(
                         photo: photo,
                         title: project.title,
-                        subtitle: project.fullAddress,
+                        subtitle: project.locationLabel,
                         priceText: project.formattedPrice,
-                        height: 430
+                        height: 430,
+                        trailingCaptionPadding: 100
                     )
                 }
                 .buttonStyle(.plain)
@@ -1141,6 +1466,9 @@ private struct PropertyGallerySlideView: View {
     let subtitle: String
     let priceText: String
     let height: CGFloat
+    /// Extra trailing clearance for the caption block. Pass ~100 when an overlay button
+    /// (e.g. "Voir") sits in the bottom-trailing corner of the same parent view.
+    var trailingCaptionPadding: CGFloat = 18
 
     var body: some View {
         ZStack {
@@ -1159,7 +1487,10 @@ private struct PropertyGallerySlideView: View {
                 symbolBackground
             }
         }
-        .frame(height: height)
+        // maxWidth anchors the ZStack to the available width so scaledToFill()
+        // never pushes the left edge off-screen. clipped() prevents pixel overflow.
+        .frame(maxWidth: .infinity, minHeight: height, maxHeight: height)
+        .clipped()
         .overlay {
             LinearGradient(
                 stops: [
@@ -1189,14 +1520,24 @@ private struct PropertyGallerySlideView: View {
                 Text(title)
                     .font(.title2.bold())
                     .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                 Text(subtitle)
                     .font(.subheadline)
                     .foregroundStyle(.white.opacity(0.88))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                 Text(priceText)
                     .font(.title3.weight(.semibold))
                     .foregroundStyle(.white)
+                    .lineLimit(1)
             }
-            .padding(18)
+            // leading: standard padding from card edge
+            // bottom: 36pt clears the TabView page indicator dots (~12-16pt from bottom)
+            // trailing: trailingCaptionPadding reserves space for any overlaid button
+            .padding(.leading, 18)
+            .padding(.bottom, 36)
+            .padding(.trailing, trailingCaptionPadding)
         }
     }
 
@@ -1234,88 +1575,134 @@ private struct PropertyGalleryFullScreenView: View {
     @State private var selectedPhotoID: UUID?
 
     var body: some View {
-        NavigationStack {
-            ZStack(alignment: .top) {
-                Color.black.ignoresSafeArea()
+        ZStack(alignment: .top) {
+            Color.black.ignoresSafeArea()
 
-                TabView(selection: Binding(get: {
-                    selectedPhotoID ?? project.photos.first?.id ?? UUID()
-                }, set: { newValue in
-                    selectedPhotoID = newValue
-                })) {
+            if project.photos.isEmpty {
+                placeholderView
+            } else {
+                TabView(selection: Binding(
+                    get: { selectedPhotoID ?? project.photos.first?.id ?? UUID() },
+                    set: { selectedPhotoID = $0 }
+                )) {
                     ForEach(project.photos) { photo in
-                        PropertyGallerySlideView(
-                            photo: photo,
-                            title: project.title,
-                            subtitle: project.fullAddress,
-                            priceText: project.formattedPrice,
-                            height: 520
-                        )
+                        GeometryReader { proxy in
+                            ZStack {
+                                Color.black
+                                if let urlString = photo.url, let url = URL(string: urlString) {
+                                    AsyncImage(url: url) { phase in
+                                        switch phase {
+                                        case .success(let image):
+                                            image
+                                                .resizable()
+                                                .scaledToFit()
+                                                .frame(width: proxy.size.width, height: proxy.size.height)
+                                        default:
+                                            Image(systemName: photo.systemName)
+                                                .font(.system(size: 72, weight: .light))
+                                                .foregroundStyle(.white.opacity(0.55))
+                                        }
+                                    }
+                                } else {
+                                    Image(systemName: photo.systemName)
+                                        .font(.system(size: 72, weight: .light))
+                                        .foregroundStyle(.white.opacity(0.55))
+                                }
+                            }
+                            .frame(width: proxy.size.width, height: proxy.size.height)
+                        }
                         .tag(photo.id)
-                        .clipShape(.rect(cornerRadius: 0))
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .automatic))
                 .indexViewStyle(.page(backgroundDisplayMode: .always))
+                .ignoresSafeArea()
+            }
 
-                VStack(spacing: 14) {
-                    HStack {
-                        Button {
-                            dismiss()
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.headline)
-                                .foregroundStyle(.white)
-                                .frame(width: 42, height: 42)
-                                .background(.black.opacity(0.3), in: .circle)
-                        }
+            overlayBar
+        }
+        .ignoresSafeArea()
+        .onAppear {
+            print("📸 Gallery opened project:", project.id)
+            print("📸 Gallery photos:", project.photos.map { $0.url ?? "no-url" })
+        }
+    }
 
-                        Spacer()
+    private var placeholderView: some View {
+        VStack(spacing: 20) {
+            Spacer()
+            Image(systemName: project.photos.first?.systemName ?? "photo.on.rectangle")
+                .font(.system(size: 80, weight: .light))
+                .foregroundStyle(.white.opacity(0.35))
+            Text("Aucune photo disponible")
+                .font(.headline)
+                .foregroundStyle(.white.opacity(0.55))
+            Text("Les photos seront ajoutées par le vendeur.")
+                .font(.subheadline)
+                .foregroundStyle(.white.opacity(0.38))
+            Spacer()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
 
-                        Button {
-                            viewModel.toggleSavedProject(project)
-                        } label: {
-                            Image(systemName: viewModel.isProjectSaved(project) ? "heart.fill" : "heart")
-                                .font(.headline)
-                                .foregroundStyle(viewModel.isProjectSaved(project) ? .red : .white)
-                                .frame(width: 42, height: 42)
-                                .background(.black.opacity(0.3), in: .circle)
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 8)
+    private var overlayBar: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(12)
+                        .background(.black.opacity(0.5), in: .circle)
+                }
 
-                    Spacer()
+                Spacer()
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        HStack {
-                            Text(project.propertyType.rawValue)
-                                .font(.footnote.weight(.semibold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 7)
-                                .background(.white.opacity(0.14), in: .capsule)
-                            Spacer()
-                            Text("\(project.photos.count) vues")
-                                .font(.footnote.weight(.semibold))
-                                .foregroundStyle(.white.opacity(0.88))
-                        }
-
-                        Text(project.feedHighlight)
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(.white)
-
-                        Text("Swipez pour parcourir toute la galerie puis revenez au feed pour candidater.")
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.78))
-                    }
-                    .padding(20)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.black.opacity(0.34))
+                Button {
+                    viewModel.toggleSavedProject(project)
+                } label: {
+                    Image(systemName: viewModel.isProjectSaved(project) ? "heart.fill" : "heart")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(viewModel.isProjectSaved(project) ? .red : .white)
+                        .padding(12)
+                        .background(.black.opacity(0.5), in: .circle)
                 }
             }
-            .toolbar(.hidden, for: .navigationBar)
+            .padding(.horizontal, 20)
+            .padding(.top, 60)
+
+            Spacer()
+
+            VStack(alignment: .leading, spacing: 10) {
+                HStack {
+                    Text(project.propertyType.rawValue)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(.white.opacity(0.14), in: .capsule)
+                    Spacer()
+                    if !project.photos.isEmpty {
+                        Text("\(project.photos.count) photo\(project.photos.count > 1 ? "s" : "")")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.white.opacity(0.88))
+                    }
+                }
+                Text(project.feedHighlight)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.white)
+                Text(project.title)
+                    .font(.subheadline)
+                    .foregroundStyle(.white.opacity(0.78))
+                    .lineLimit(1)
+            }
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(.black.opacity(0.5))
         }
+        .allowsHitTesting(true)
     }
 }
 
@@ -1341,21 +1728,29 @@ private struct DashboardTopCardView: View {
 private struct ProjectSummaryCardView: View {
     let project: PropertyProject
 
+    private var newCount: Int { project.applications.filter { !$0.sellerHasSeen }.count }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             PropertyHeroImageView(photo: project.photos.first, height: 230) {
                 VStack(alignment: .leading, spacing: 10) {
-                    HStack {
+                    HStack(alignment: .top) {
                         StatusBadgeView(text: project.status.accentLabel)
 
                         Spacer()
 
-                        Text(project.propertyType.rawValue)
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 7)
-                            .background(.black.opacity(0.22), in: .capsule)
+                        VStack(alignment: .trailing, spacing: 8) {
+                            Text(project.propertyType.rawValue)
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 7)
+                                .background(.black.opacity(0.22), in: .capsule)
+
+                            if newCount > 0 {
+                                ApplicationCountDotView(count: newCount)
+                            }
+                        }
                     }
 
                     Spacer()
@@ -1385,6 +1780,35 @@ private struct ProjectSummaryCardView: View {
             }
         }
         .storeImmoCardStyle()
+    }
+}
+
+private struct ApplicationCountDotView: View {
+    let count: Int
+    @State private var scale: CGFloat = 0.01
+
+    private var label: String { count > 9 ? "9+" : "+\(count)" }
+
+    var body: some View {
+        Text(label)
+            .font(.system(size: 12, weight: .bold, design: .rounded))
+            .foregroundStyle(.white)
+            .frame(minWidth: 28, minHeight: 28)
+            .padding(.horizontal, count > 9 ? 4 : 0)
+            .background(Color(red: 1, green: 0.231, blue: 0.188), in: .capsule)
+            .shadow(color: .black.opacity(0.28), radius: 5, y: 2)
+            .scaleEffect(scale)
+            .onAppear {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.52)) {
+                    scale = 1
+                }
+            }
+            .onChange(of: count) { _, _ in
+                scale = 0.01
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.52)) {
+                    scale = 1
+                }
+            }
     }
 }
 private struct ProjectFollowUpHeroCardView: View {
@@ -1453,7 +1877,7 @@ private struct ProjectOpportunityCardView: View {
                         Text(project.title)
                             .font(isImmersive ? .title2.bold() : .headline)
                             .foregroundStyle(.white)
-                        Text(project.fullAddress)
+                        Text(project.locationLabel)
                             .font(.subheadline)
                             .foregroundStyle(.white.opacity(0.88))
                         Text(project.formattedPrice)
@@ -1489,59 +1913,375 @@ private struct ProjectOpportunityCardView: View {
     }
 }
 
+private struct AgentApplyButton: View {
+    let project: PropertyProject
+    var onApply: () -> Void = {}
+    var showsConfirmation: Bool = false
+    @State private var pendingConfirm = false
+    @Environment(AppViewModel.self) private var viewModel
+
+    private enum ApplyState {
+        case canApply
+        case alreadyApplied
+        case upgradeRequired
+    }
+
+    private var applyState: ApplyState {
+        if viewModel.hasApplied(to: project) { return .alreadyApplied }
+        if !viewModel.isAgentSubscriptionActive {
+            return viewModel.freeApplicationUsed ? .upgradeRequired : .canApply
+        }
+        return viewModel.applicationsTodayRemaining <= 0 ? .upgradeRequired : .canApply
+    }
+
+    var body: some View {
+        Group {
+            switch applyState {
+            case .canApply:
+                Button {
+                    if showsConfirmation {
+                        pendingConfirm = true
+                    } else {
+                        onApply()
+                    }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "paperplane.fill")
+                        Text("Candidater").fontWeight(.semibold)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .contentShape(Rectangle())
+
+            case .alreadyApplied:
+                Button { } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                        Text("Candidaté").fontWeight(.semibold)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(true)
+
+            case .upgradeRequired:
+                Button { viewModel.showSubscriptionUpgradeSheet = true } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.up.circle.fill")
+                        Text("Passer à l'offre sup.").fontWeight(.semibold)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .contentShape(Rectangle())
+            }
+        }
+        .alert("Envoyer votre candidature ?", isPresented: $pendingConfirm) {
+            Button("Annuler", role: .cancel) { }
+            Button("Confirmer") {
+                viewModel.submitAgentApplication(for: project)
+            }
+        } message: {
+            Text("Êtes-vous sûr de vouloir candidater pour ce projet ? Cette action utilisera une candidature disponible de votre compte.")
+        }
+    }
+}
+
+// MARK: - Clean Agent Card (rebuilt from scratch)
+
+private struct CleanAgentProjectCardView: View {
+    let project: PropertyProject
+    let onOpen: () -> Void
+    @Environment(AppViewModel.self) private var viewModel
+    @State private var pendingConfirm = false
+
+    private enum ApplyState { case canApply, alreadyApplied, upgradeRequired }
+
+    private var applyState: ApplyState {
+        if viewModel.hasApplied(to: project) { return .alreadyApplied }
+        if !viewModel.isAgentSubscriptionActive {
+            return viewModel.freeApplicationUsed ? .upgradeRequired : .canApply
+        }
+        return viewModel.applicationsTodayRemaining <= 0 ? .upgradeRequired : .canApply
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            imageZone
+            metaInfo
+            mainButton
+        }
+        .padding(16)
+        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 24))
+        .alert("Envoyer votre candidature ?", isPresented: $pendingConfirm) {
+            Button("Annuler", role: .cancel) { }
+            Button("Confirmer") {
+                print("📩 CANDIDATER CONFIRM project:", project.id)
+                viewModel.submitAgentApplication(for: project)
+            }
+        } message: {
+            Text("Cette action utilisera une candidature disponible de votre compte.")
+        }
+    }
+
+    // MARK: Image zone
+
+    private var imageZone: some View {
+        ZStack {
+            // Layer 1 — Photo (non-interactive)
+            photoContent
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .allowsHitTesting(false)
+
+            // Layer 2 — Gradient (non-interactive)
+            LinearGradient(
+                stops: [
+                    .init(color: .clear, location: 0.25),
+                    .init(color: .black.opacity(0.65), location: 1.0)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .allowsHitTesting(false)
+
+            // Layer 3 — Badges + text (non-interactive)
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .top) {
+                    StatusBadgeView(text: project.status.accentLabel)
+                    Spacer()
+                    Text(project.propertyType.rawValue)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 7)
+                        .background(.black.opacity(0.22), in: .capsule)
+                }
+                Spacer()
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(project.title)
+                        .font(.title3.bold())
+                        .foregroundStyle(.white)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .padding(.trailing, 80)
+                    Text(project.locationLabel)
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.88))
+                        .lineLimit(1)
+                        .padding(.trailing, 80)
+                    Text(project.formattedPrice)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.white)
+                }
+            }
+            .padding(16)
+            .allowsHitTesting(false)
+
+            // Layer 4 — Heart button (interactive, top-right)
+            VStack {
+                HStack {
+                    Spacer()
+                    Button {
+                        print("⭐ FAVORI TAP project:", project.id)
+                        viewModel.toggleSavedProject(project)
+                    } label: {
+                        Image(systemName: viewModel.isProjectSaved(project) ? "heart.fill" : "heart")
+                            .font(.headline)
+                            .foregroundStyle(viewModel.isProjectSaved(project) ? .red : .white)
+                            .frame(width: 42, height: 42)
+                            .background(.black.opacity(0.26), in: .circle)
+                    }
+                }
+                .padding(.top, 58)
+                .padding(.trailing, 14)
+                Spacer()
+            }
+
+            // Layer 5 — Voir button (interactive, bottom-right)
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Button {
+                        print("👁 VOIR TAP project:", project.id)
+                        onOpen()
+                    } label: {
+                        Text("Voir").fontWeight(.semibold)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.large)
+                }
+                .padding(.bottom, 14)
+                .padding(.trailing, 14)
+            }
+        }
+        .frame(height: 230)
+        .clipShape(.rect(cornerRadius: 22))
+    }
+
+    // MARK: Photo
+
+    @ViewBuilder
+    private var photoContent: some View {
+        if let urlString = project.photos.first?.url, let url = URL(string: urlString) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().scaledToFill()
+                default:
+                    symbolBackground
+                }
+            }
+        } else {
+            symbolBackground
+        }
+    }
+
+    private var symbolBackground: some View {
+        Color(StoreImmoTheme.navy)
+            .overlay {
+                Image(systemName: project.photos.first?.systemName ?? "house")
+                    .font(.system(size: 56, weight: .light))
+                    .foregroundStyle(.white.opacity(0.45))
+            }
+    }
+
+    // MARK: Meta info
+
+    private var metaInfo: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                StatusBadgeView(text: project.districtLabel)
+                StatusBadgeView(text: project.typology.rawValue)
+                Text(project.propertyType.rawValue)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Text(project.description)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+            Label(project.city, systemImage: "location")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    // MARK: Main button
+
+    @ViewBuilder
+    private var mainButton: some View {
+        switch applyState {
+        case .canApply:
+            Button {
+                print("📩 CANDIDATER TAP project:", project.id)
+                pendingConfirm = true
+            } label: {
+                Label("Candidater", systemImage: "paperplane.fill")
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .contentShape(Rectangle())
+
+        case .alreadyApplied:
+            Button { } label: {
+                Label("Candidaté", systemImage: "checkmark.circle.fill")
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .disabled(true)
+
+        case .upgradeRequired:
+            Button {
+                viewModel.showSubscriptionUpgradeSheet = true
+            } label: {
+                Label("Passer à l'offre sup.", systemImage: "arrow.up.circle.fill")
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+            .contentShape(Rectangle())
+        }
+    }
+}
+
 private struct DiscoverPropertyCardView: View {
     let project: PropertyProject
     let onOpen: () -> Void
-    let onApply: () -> Void
-    let onGallery: () -> Void
     @Environment(AppViewModel.self) private var viewModel
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            DiscoverPropertyGalleryPreview(project: project, onGallery: onGallery)
-                .overlay(alignment: .topTrailing) {
-                    VStack(spacing: 10) {
-                        if viewModel.hasApplied(to: project) {
-                            Text("Candidaté")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 9)
-                                .background(.blue, in: .capsule)
-                        } else {
-                            Button {
-                                viewModel.toggleSavedProject(project)
-                            } label: {
-                                Image(systemName: viewModel.isProjectSaved(project) ? "heart.fill" : "heart")
-                                    .font(.headline)
-                                    .foregroundStyle(viewModel.isProjectSaved(project) ? .red : .white)
-                                    .frame(width: 42, height: 42)
-                                    .background(.black.opacity(0.26), in: .circle)
-                            }
-                        }
-                        
-                        Image(systemName: "bell.badge.fill")
-                            .font(.headline)
+            PropertyHeroImageView(photo: project.photos.first, height: 230) {
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        StatusBadgeView(text: project.status.accentLabel)
+                        Spacer()
+                        Text(project.propertyType.rawValue)
+                            .font(.footnote.weight(.semibold))
                             .foregroundStyle(.white)
-                            .frame(width: 42, height: 42)
-                            .background(.black.opacity(0.22), in: .circle)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(.black.opacity(0.22), in: .capsule)
                     }
-                    .padding(16)
-                }
-                .overlay(alignment: .bottomTrailing) {
-                    Button("Voir") {
-                        onOpen()
+                    Spacer()
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(project.title)
+                            .font(.title3.bold())
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .padding(.trailing, 72)
+                        Text(project.locationLabel)
+                            .font(.subheadline)
+                            .foregroundStyle(.white.opacity(0.88))
+                            .lineLimit(1)
+                            .padding(.trailing, 72)
+                        Text(project.formattedPrice)
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .padding(16)
                 }
-            
+            }
+            .overlay(alignment: .topTrailing) {
+                Button {
+                    viewModel.toggleSavedProject(project)
+                } label: {
+                    Image(systemName: viewModel.isProjectSaved(project) ? "heart.fill" : "heart")
+                        .font(.headline)
+                        .foregroundStyle(viewModel.isProjectSaved(project) ? .red : .white)
+                        .frame(width: 42, height: 42)
+                        .background(.black.opacity(0.26), in: .circle)
+                }
+                .padding(.top, 68)
+                .padding(.trailing, 16)
+            }
+            .overlay(alignment: .bottomTrailing) {
+                Button("Voir") {
+                    onOpen()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .padding(16)
+            }
+
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 8) {
                         StatusBadgeView(text: project.districtLabel)
-                        Text(project.feedHighlight)
+                        StatusBadgeView(text: project.typology.rawValue)
+                        Text(project.propertyType.rawValue)
                             .font(.footnote.weight(.semibold))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
@@ -1550,63 +2290,15 @@ private struct DiscoverPropertyCardView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
-                    Label(project.requiredRegion, systemImage: "location")
+                    Label(project.city, systemImage: "location")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
             }
-            
-            HStack(spacing: 10) {
-                Button {
-                    onGallery()
-                } label: {
-                    HStack {
-                        Image(systemName: "photo.on.rectangle")
-                        Text("Galerie")
-                            .fontWeight(.semibold)
-                    }
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.large)
-                
-                if viewModel.hasApplied(to: project) {
-                    
-                    Button { } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.caption)
 
-                            VStack(spacing: -1) {
-                                Text("Candidature")
-                                Text("envoyée")
-                            }
-                            .font(.caption.weight(.semibold))
-                            .multilineTextAlignment(.center)
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .disabled(true)
-                    
-                } else {
-                    
-                    Button {
-                        onApply()
-                    } label: {
-                        HStack {
-                            Image(systemName: "paperplane.fill")
-                            Text("Candidater")
-                                .fontWeight(.semibold)
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                }
-            }
+            AgentApplyButton(project: project, showsConfirmation: true)
+                .zIndex(10)
         }
         .storeImmoCardStyle()
     }
@@ -1621,11 +2313,13 @@ private struct PropertyHeroImageView<OverlayContent: View>: View {
         ZStack {
             if let urlString = photo?.url, let url = URL(string: urlString) {
                 AsyncImage(url: url) { phase in
-                    if case .success(let image) = phase {
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    } else {
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    case .failure(let error):
+                        let _ = print("🚨 AsyncImage echec:", url.absoluteString, "-", error.localizedDescription)
+                        symbolBackground
+                    default:
                         symbolBackground
                     }
                 }
@@ -1634,7 +2328,8 @@ private struct PropertyHeroImageView<OverlayContent: View>: View {
                 symbolBackground
             }
         }
-        .frame(height: height)
+        .frame(maxWidth: .infinity, minHeight: height, maxHeight: height)
+        .clipped()
         .overlay {
             LinearGradient(
                 stops: [
@@ -1651,6 +2346,7 @@ private struct PropertyHeroImageView<OverlayContent: View>: View {
         .overlay(alignment: .bottomLeading) {
             overlayContent
                 .padding(18)
+                .allowsHitTesting(false)
         }
     }
 
@@ -1780,10 +2476,11 @@ private struct StatusBadgeView: View {
 private struct ProjectMetricBadgeView: View {
     let value: Int
     let label: String
+    var valueText: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(value.formatted(.number.grouping(.automatic)))
+            Text(valueText ?? value.formatted(.number.grouping(.automatic)))
                 .font(.headline)
             Text(label)
                 .font(.caption)
@@ -1803,7 +2500,7 @@ private struct SellerProjectDetailView: View {
     }
 
     @Environment(AppViewModel.self) private var viewModel
-    @State private var selectedAgent: AgentProfile?
+    @State private var selectedApplication: AgentApplication?
 
     var body: some View {
         ScrollView {
@@ -1812,14 +2509,14 @@ private struct SellerProjectDetailView: View {
 
                 PropertyPhotoStripView(photos: currentProject.photos, height: 210)
 
-               
+
                 VStack(alignment: .leading, spacing: 12) {
 
                     Text("Candidatures")
                         .font(.title3.bold())
 
                     let pendingApplications = currentProject.applications
-                    
+                        .sorted { $0.appliedAt > $1.appliedAt }
 
                     if pendingApplications.isEmpty {
                         ContentUnavailableView(
@@ -1831,11 +2528,10 @@ private struct SellerProjectDetailView: View {
                             AgentApplicationCardView(
                                 application: application,
                                 onProfile: {
-                                    selectedAgent = application.agent
+                                    selectedApplication = application
                                 },
                                 onChoose: {
-                                    print("🔥 BOUTON CLIQUE")
-                                        viewModel.chooseAgent(application)
+                                    viewModel.chooseAgent(application)
                                 }
                             )
                         }
@@ -1844,59 +2540,106 @@ private struct SellerProjectDetailView: View {
             }
             .padding(20)
         }
+        .onDisappear { viewModel.markAllApplicationsSeenForProject(currentProject) }
         .navigationTitle(currentProject.title)
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(item: $selectedAgent) { agent in
-            AgentProfileSheetView(agent: agent)
+        .sheet(item: $selectedApplication) { application in
+            AgentProfileSheetView(agent: application.agent, appliedAt: application.appliedAt)
                 .presentationDetents([.medium, .large])
                 .presentationContentInteraction(.scrolls)
         }
     }
 }
         
+private struct AgentAvatarView: View {
+    let agent: AgentProfile
+    var size: CGFloat = 52
+
+    var body: some View {
+        if let urlString = agent.profilePhotoURL, let url = URL(string: urlString) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: size, height: size)
+                        .clipShape(.circle)
+                default:
+                    fallbackView
+                }
+            }
+            .frame(width: size, height: size)
+        } else {
+            fallbackView
+        }
+    }
+
+    private var fallbackView: some View {
+        Image(systemName: agent.photoSymbol)
+            .font(.system(size: size * 0.54))
+            .foregroundStyle(StoreImmoTheme.navy)
+            .frame(width: size, height: size)
+            .background(StoreImmoTheme.mist, in: .circle)
+    }
+}
+
 struct AgentApplicationCardView: View {
     let application: AgentApplication
     let onProfile: () -> Void
     let onChoose: () -> Void
 
+    private var agencyDisplay: String {
+        application.agent.agencyName.isEmpty ? "Indépendant" : application.agent.agencyName
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 14) {
-                Image(systemName: application.agent.photoSymbol)
-                    .font(.system(size: 32))
-                    .foregroundStyle(StoreImmoTheme.navy)
-                    .frame(width: 56, height: 56)
-                    .background(StoreImmoTheme.mist, in: .circle)
 
-                VStack(alignment: .leading, spacing: 6) {
+            // Header : avatar · identité · badge carte pro
+            HStack(alignment: .top, spacing: 14) {
+                AgentAvatarView(agent: application.agent, size: 52)
+
+                VStack(alignment: .leading, spacing: 4) {
                     Text(application.agent.fullName)
                         .font(.headline)
-                    Text(application.agent.agencyName)
+
+                    Text(agencyDisplay)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                    HStack(spacing: 8) {
-                        Label(String(format: "%.1f", application.agent.averageRating), systemImage: "star.fill")
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(.yellow)
-                        Text("\(application.agent.reviewCount) avis")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
+
+                    Divider()
+                        .padding(.vertical, 2)
+
+                    Label(application.agent.trustIndicators.memberSince, systemImage: "calendar")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Label(application.agent.trustIndicators.responseTime, systemImage: "clock")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 Spacer()
                 StatusBadgeView(text: application.agent.badge.title)
             }
 
+            // Description de l'agent
             Text(application.customMessage)
                 .font(.subheadline)
                 .foregroundStyle(.primary)
+                .lineLimit(3)
 
-            HStack(spacing: 12) {
-                ProjectMetricBadgeView(value: application.agent.salesLast12Months, label: "Ventes 12 mois")
-                ProjectMetricBadgeView(value: application.agent.soldRate, label: "Bien vendu %")
+            // Date de candidature
+            HStack(spacing: 4) {
+                Image(systemName: "clock")
+                    .font(.caption2)
+                Text(application.appliedAt.candidatureRelativeLabel)
+                    .font(.caption)
             }
+            .foregroundStyle(.secondary)
 
+            // Actions
             HStack(spacing: 10) {
                 Button("Voir profil complet") {
                     onProfile()
@@ -1915,6 +2658,63 @@ struct AgentApplicationCardView: View {
             }
         }
         .storeImmoCardStyle()
+        .overlay(alignment: .topTrailing) {
+            if !application.sellerHasSeen {
+                Circle()
+                    .fill(Color(red: 1, green: 0.231, blue: 0.188))
+                    .frame(width: 11, height: 11)
+                    .shadow(color: .black.opacity(0.28), radius: 3, y: 1)
+                    .padding(11)
+            }
+        }
+    }
+}
+
+private extension Date {
+    var candidatureRelativeLabel: String {
+        let seconds = Date().timeIntervalSince(self)
+        if seconds < 60 { return "Il vient de candidater" }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.locale = Locale(identifier: "fr_FR")
+        formatter.unitsStyle = .full
+        formatter.dateTimeStyle = .named
+        return "A candidaté \(formatter.localizedString(for: self, relativeTo: Date()))"
+    }
+}
+
+private struct AgentTrustChip: View {
+    let icon: String
+    let text: String
+
+    var body: some View {
+        Label(text, systemImage: icon)
+            .font(.caption2.weight(.medium))
+            .foregroundStyle(StoreImmoTheme.navy)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(StoreImmoTheme.mist, in: .capsule)
+            .lineLimit(1)
+    }
+}
+
+private struct AgentTrustRowView: View {
+    let indicators: AgentTrustIndicators
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(indicators.memberSince, systemImage: "calendar")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            Label(indicators.responseTime, systemImage: "clock")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            Label(indicators.recentActivity, systemImage: "bolt.circle")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.tertiarySystemBackground), in: .rect(cornerRadius: 14))
     }
 }
 
@@ -1942,58 +2742,73 @@ private struct ChatActivationCardView: View {
 
 private struct AgentProfileSheetView: View {
     let agent: AgentProfile
+    let appliedAt: Date
+    @State private var fullIndicators: AgentTrustIndicators?
+
+    private var displayedIndicators: AgentTrustIndicators {
+        fullIndicators ?? agent.trustIndicators
+    }
+
+    private var agencyDisplay: String {
+        agent.agencyName.isEmpty ? "Indépendant" : agent.agencyName
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    HStack(spacing: 16) {
-                        Image(systemName: agent.photoSymbol)
-                            .font(.system(size: 40))
-                            .foregroundStyle(.white)
-                            .frame(width: 78, height: 78)
-                            .background(StoreImmoTheme.heroGradient, in: .circle)
-                        VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 24) {
+
+                    // Header — même hiérarchie que la carte candidature
+                    HStack(alignment: .top, spacing: 14) {
+                        AgentAvatarView(agent: agent, size: 60)
+
+                        VStack(alignment: .leading, spacing: 4) {
                             Text(agent.fullName)
-                                .font(.title3.bold())
-                            Text(agent.agencyName)
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
-                            StatusBadgeView(text: agent.badge.detail)
-                        }
-                    }
-
-                    Text(agent.bio)
-                        .font(.body)
-
-                    HStack(spacing: 12) {
-                        ProjectMetricBadgeView(value: agent.salesLast12Months, label: "Ventes")
-                        ProjectMetricBadgeView(value: agent.averageDelayDays, label: "Délai moyen")
-                        ProjectMetricBadgeView(value: agent.averageSalePrice, label: "Prix moyen")
-                    }
-
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Zones d’intervention")
-                            .font(.headline)
-                        ForEach(agent.interventionZones) { zone in
-                            Text("• \(zone.city) · \(zone.radiusKilometers) km")
+                                .font(.headline)
+                            Text(agencyDisplay)
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
+
+                        Spacer()
+                        StatusBadgeView(text: agent.badge.title)
                     }
 
+                    // Description
+                    if !agent.bio.isEmpty {
+                        Text(agent.bio)
+                            .font(.subheadline)
+                            .foregroundStyle(.primary)
+                    }
+
+                    // Informations du profil
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Avis vérifiés")
+                        Text("Informations du profil")
                             .font(.headline)
-                        ForEach(agent.reviews) { review in
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(review.author)
-                                    .font(.subheadline.weight(.semibold))
-                                Text(review.comment)
+
+                        Label(displayedIndicators.memberSince, systemImage: "calendar")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+
+                        Label(displayedIndicators.responseTime, systemImage: "clock")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+
+                        Label(appliedAt.candidatureRelativeLabel, systemImage: "paperplane")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    // Zones d'intervention (si existantes)
+                    if !agent.interventionZones.isEmpty {
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text("Zones d'intervention")
+                                .font(.headline)
+                            ForEach(agent.interventionZones) { zone in
+                                Text("• \(zone.city) · \(zone.radiusKilometers) km")
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                             }
-                            .storeImmoCardStyle()
                         }
                     }
                 }
@@ -2001,6 +2816,126 @@ private struct AgentProfileSheetView: View {
             }
             .navigationTitle("Profil agent")
             .navigationBarTitleDisplayMode(.inline)
+            .task {
+                fullIndicators = await SupabaseRepository.shared.buildAgentTrustIndicators(agent: agent)
+            }
+        }
+    }
+}
+
+private struct SellerPhotoPicker: View {
+    @Binding var photoSlotDatas: [Data?]
+    @State private var pickerItems: [PhotosPickerItem] = []
+    @State private var isLoading = false
+
+    private let specs = AppViewModel.photoSlotSpecs
+    private var filledCount: Int { photoSlotDatas.compactMap { $0 }.count }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                PhotosPicker(
+                    selection: $pickerItems,
+                    maxSelectionCount: specs.count,
+                    matching: .images,
+                    photoLibrary: .shared()
+                ) {
+                    HStack(spacing: 12) {
+                        Image(systemName: filledCount > 0 ? "photo.stack.fill" : "photo.badge.plus")
+                            .font(.system(size: 16))
+                            .foregroundStyle(Color(StoreImmoTheme.navy))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(filledCount > 0 ? "Photos du bien · Modifier" : "Ajouter des photos")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.primary)
+                            Text("Facade, salon, cuisine, chambre...")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if isLoading {
+                            ProgressView().controlSize(.small)
+                        } else if filledCount > 0 {
+                            Text("\(filledCount)/\(specs.count)")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Color(StoreImmoTheme.navy))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color(StoreImmoTheme.navy).opacity(0.1), in: .capsule)
+                        } else {
+                            Text("Optionnel")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(14)
+                    .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+
+                if filledCount > 0 {
+                    Button {
+                        photoSlotDatas = Array(repeating: nil, count: specs.count)
+                        pickerItems = []
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            if filledCount > 0 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(Array(photoSlotDatas.enumerated()), id: \.offset) { i, data in
+                            if let data, let img = UIImage(data: data) {
+                                ZStack(alignment: .bottomLeading) {
+                                    Image(uiImage: img)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 80, height: 80)
+                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                                    Text(specs[i].label)
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 4)
+                                        .padding(.vertical, 2)
+                                        .background(.black.opacity(0.55), in: .capsule)
+                                        .padding(5)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .onChange(of: pickerItems) { _, items in
+            guard !items.isEmpty else { return }
+            isLoading = true
+            Task {
+                defer { isLoading = false }
+                var newDatas = Array(repeating: nil as Data?, count: specs.count)
+                for (i, item) in items.prefix(specs.count).enumerated() {
+                    do {
+                        if let raw = try await item.loadTransferable(type: Data.self) {
+                            if let img = UIImage(data: raw),
+                               let jpeg = img.jpegData(compressionQuality: 0.75) {
+                                newDatas[i] = jpeg
+                                print("📷 Photo[\(i)] chargee: \(jpeg.count / 1024)KB")
+                            } else {
+                                newDatas[i] = raw
+                                print("📷 Photo[\(i)] chargee brute: \(raw.count / 1024)KB")
+                            }
+                        } else {
+                            print("⚠️ Photo[\(i)] loadTransferable retourne nil")
+                        }
+                    } catch {
+                        print("🚨 Photo[\(i)] loadTransferable erreur:", error)
+                    }
+                }
+                photoSlotDatas = newDatas
+            }
         }
     }
 }
@@ -2009,9 +2944,8 @@ private struct SellerProjectComposerView: View {
     @Environment(AppViewModel.self) private var viewModel
     @Environment(\.dismiss) private var dismiss
 
-    @State private var selectedPhoto: PhotosPickerItem?
-    @State private var selectedPhotoData: Data?
-    
+    @State private var photoSlotDatas: [Data?] = Array(repeating: nil, count: 6)
+
     var body: some View {
         @Bindable var viewModel = viewModel
 
@@ -2034,6 +2968,13 @@ private struct SellerProjectComposerView: View {
                     }
                     .pickerStyle(.menu)
 
+                    Picker("Typologie", selection: $viewModel.sellerLeadDraft.typology) {
+                        ForEach(PropertyTypology.allCases) { t in
+                            Text(t.rawValue).tag(t)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
                     TextField("Prix souhaité", text: $viewModel.sellerLeadDraft.desiredPrice)
                         .textFieldStyle(.roundedBorder)
                         .keyboardType(.numberPad)
@@ -2048,28 +2989,13 @@ private struct SellerProjectComposerView: View {
                         .textFieldStyle(.roundedBorder)
                         .lineLimit(3, reservesSpace: true)
 
-                    PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                        Label("Ajouter une photo", systemImage: "photo.badge.plus")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-
-                    if let selectedPhotoData,
-                       let uiImage = UIImage(data: selectedPhotoData) {
-                        Image(uiImage: uiImage)
-                            .resizable()
-                            .scaledToFill()
-                            .frame(height: 220)
-                            .clipShape(RoundedRectangle(cornerRadius: 20))
-                    }
+                    SellerPhotoPicker(photoSlotDatas: $photoSlotDatas)
+                }
                 .padding(20)
             }
             .navigationTitle("Nouveau projet")
             .navigationBarTitleDisplayMode(.inline)
-            .task(id: selectedPhoto) {
-                guard let selectedPhoto else { return }
-                selectedPhotoData = try? await selectedPhoto.loadTransferable(type: Data.self)
-            }
+            .environment(\.locale, Locale(identifier: "fr_FR"))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Fermer") {
@@ -2078,9 +3004,241 @@ private struct SellerProjectComposerView: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Publier") {
-                        viewModel.submitSellerLead(photoData: selectedPhotoData)
+                        viewModel.submitSellerLead(photoDatas: photoSlotDatas)
                         dismiss()
                     }
+                }
+            }
+        }
+    }
+}
+
+private struct SellerPhotoEditorPicker: View {
+    @Binding var existingURLs: [String?]
+    @Binding var newDatas: [Data?]
+    @State private var pickerItems: [PhotosPickerItem] = []
+    @State private var isLoading = false
+
+    private let specs = AppViewModel.photoSlotSpecs
+
+    private var filledCount: Int {
+        (0..<specs.count).filter { i in
+            (newDatas.indices.contains(i) && newDatas[i] != nil) ||
+            (existingURLs.indices.contains(i) && existingURLs[i] != nil)
+        }.count
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                PhotosPicker(
+                    selection: $pickerItems,
+                    maxSelectionCount: specs.count,
+                    matching: .images,
+                    photoLibrary: .shared()
+                ) {
+                    HStack(spacing: 12) {
+                        Image(systemName: filledCount > 0 ? "photo.stack.fill" : "photo.badge.plus")
+                            .font(.system(size: 16))
+                            .foregroundStyle(Color(StoreImmoTheme.navy))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(filledCount > 0 ? "Photos du bien · Modifier" : "Ajouter des photos")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(.primary)
+                            Text("Façade, salon, cuisine, chambre...")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if isLoading {
+                            ProgressView().controlSize(.small)
+                        } else if filledCount > 0 {
+                            Text("\(filledCount)/\(specs.count)")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Color(StoreImmoTheme.navy))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 3)
+                                .background(Color(StoreImmoTheme.navy).opacity(0.1), in: .capsule)
+                        } else {
+                            Text("Optionnel")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(14)
+                    .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 12))
+                }
+                .buttonStyle(.plain)
+            }
+
+            if filledCount > 0 {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(0..<specs.count, id: \.self) { i in
+                            let hasNew = newDatas.indices.contains(i) && newDatas[i] != nil
+                            let hasExisting = existingURLs.indices.contains(i) && existingURLs[i] != nil
+                            if hasNew || hasExisting {
+                                ZStack(alignment: .topTrailing) {
+                                    if hasNew, let data = newDatas[i], let img = UIImage(data: data) {
+                                        Image(uiImage: img)
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(width: 80, height: 80)
+                                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                                    } else if hasExisting, let urlStr = existingURLs[i], let url = URL(string: urlStr) {
+                                        AsyncImage(url: url) { phase in
+                                            switch phase {
+                                            case .success(let img): img.resizable().scaledToFill()
+                                            default: Color(.systemGray5)
+                                            }
+                                        }
+                                        .frame(width: 80, height: 80)
+                                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                                    }
+                                    Button {
+                                        if newDatas.indices.contains(i) { newDatas[i] = nil }
+                                        if existingURLs.indices.contains(i) { existingURLs[i] = nil }
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .font(.system(size: 18))
+                                            .symbolRenderingMode(.palette)
+                                            .foregroundStyle(.white, Color.black.opacity(0.55))
+                                    }
+                                    .padding(3)
+                                    Text(specs[i].label)
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundStyle(.white)
+                                        .padding(.horizontal, 4)
+                                        .padding(.vertical, 2)
+                                        .background(.black.opacity(0.55), in: .capsule)
+                                        .padding(5)
+                                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                                }
+                                .frame(width: 80, height: 80)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        .onChange(of: pickerItems) { _, items in
+            guard !items.isEmpty else { return }
+            isLoading = true
+            Task {
+                defer { isLoading = false }
+                var loaded = Array(repeating: nil as Data?, count: specs.count)
+                for (i, item) in items.prefix(specs.count).enumerated() {
+                    if let raw = try? await item.loadTransferable(type: Data.self) {
+                        loaded[i] = UIImage(data: raw)?.jpegData(compressionQuality: 0.75) ?? raw
+                    }
+                }
+                newDatas = loaded
+                pickerItems = []
+            }
+        }
+    }
+}
+
+private struct SellerProjectEditorView: View {
+    let project: PropertyProject
+    @Environment(AppViewModel.self) private var viewModel
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var address: String
+    @State private var city: String
+    @State private var postalCode: String
+    @State private var propertyType: PropertyType
+    @State private var typology: PropertyTypology
+    @State private var desiredPriceText: String
+    @State private var idealListingDate: Date
+    @State private var description: String
+    @State private var extraInformation: String
+    @State private var existingPhotoURLs: [String?]
+    @State private var newPhotoDatas: [Data?]
+
+    init(project: PropertyProject) {
+        self.project = project
+        _address = State(initialValue: project.fullAddress)
+        _city = State(initialValue: project.city)
+        _postalCode = State(initialValue: project.postalCode)
+        _propertyType = State(initialValue: project.propertyType)
+        _typology = State(initialValue: project.typology)
+        _desiredPriceText = State(initialValue: project.desiredPrice > 0 ? "\(project.desiredPrice)" : "")
+        _idealListingDate = State(initialValue: project.idealListingDate)
+        _description = State(initialValue: project.description)
+        _extraInformation = State(initialValue: project.extraInformation)
+        let slotCount = AppViewModel.photoSlotSpecs.count
+        _existingPhotoURLs = State(initialValue: (0..<slotCount).map { i in
+            project.photos.indices.contains(i) ? project.photos[i].url : nil
+        })
+        _newPhotoDatas = State(initialValue: Array(repeating: nil, count: slotCount))
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    TextField("Adresse complète", text: $address)
+                        .textFieldStyle(.roundedBorder)
+                    HStack {
+                        TextField("Ville", text: $city)
+                            .textFieldStyle(.roundedBorder)
+                        TextField("Code postal", text: $postalCode)
+                            .textFieldStyle(.roundedBorder)
+                    }
+                    Picker("Type de bien", selection: $propertyType) {
+                        ForEach(PropertyType.allCases) { type in
+                            Text(type.rawValue).tag(type)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    Picker("Typologie", selection: $typology) {
+                        ForEach(PropertyTypology.allCases) { t in
+                            Text(t.rawValue).tag(t)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    TextField("Prix souhaité", text: $desiredPriceText)
+                        .textFieldStyle(.roundedBorder)
+                        .keyboardType(.numberPad)
+                    DatePicker("Date idéale", selection: $idealListingDate, displayedComponents: .date)
+                    TextField("Description", text: $description, axis: .vertical)
+                        .textFieldStyle(.roundedBorder)
+                        .lineLimit(4, reservesSpace: true)
+                    TextField("Informations complémentaires", text: $extraInformation, axis: .vertical)
+                        .textFieldStyle(.roundedBorder)
+                        .lineLimit(3, reservesSpace: true)
+                    SellerPhotoEditorPicker(existingURLs: $existingPhotoURLs, newDatas: $newPhotoDatas)
+                }
+                .padding(20)
+            }
+            .navigationTitle("Modifier le projet")
+            .navigationBarTitleDisplayMode(.inline)
+            .environment(\.locale, Locale(identifier: "fr_FR"))
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Fermer") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Enregistrer") {
+                        let price = Int(desiredPriceText.replacingOccurrences(of: " ", with: "")) ?? project.desiredPrice
+                        viewModel.updateProject(
+                            project,
+                            address: address,
+                            city: city,
+                            postalCode: postalCode,
+                            propertyType: propertyType,
+                            typology: typology,
+                            desiredPrice: price,
+                            idealListingDate: idealListingDate,
+                            description: description,
+                            extraInformation: extraInformation,
+                            existingPhotoURLs: existingPhotoURLs,
+                            newPhotoDatas: newPhotoDatas
+                        )
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
                 }
             }
         }
@@ -2172,7 +3330,7 @@ private struct SubscriptionPlansView: View {
                         Text("Choisissez votre offre")
                             .font(.system(size: 30, weight: .bold))
                             .foregroundStyle(StoreImmoTheme.navy)
-                        Text("L’abonnement est obligatoire pour activer votre compte agent et candidater sur les projets vendeurs.")
+                        Text("L'abonnement est obligatoire pour activer votre compte agent et candidater sur les projets vendeurs.")
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
@@ -2185,9 +3343,11 @@ private struct SubscriptionPlansView: View {
                             isSelected: viewModel.selectedPlan == plan && viewModel.isAgentSubscriptionActive
                         ) {
                             viewModel.chooseSubscription(plan)
-                            if showsCloseButton {
-                                dismiss()
-                            }
+                            // chooseSubscription sets showSubscriptionUpgradeSheet = false,
+                            // which auto-dismisses the upgrade sheet. For onboarding
+                            // (showsCloseButton = false), the view transition is handled
+                            // by hasChosenAgentSubscription flipping.
+                            if showsCloseButton { dismiss() }
                         }
                     }
 
@@ -2195,7 +3355,7 @@ private struct SubscriptionPlansView: View {
                         HStack(spacing: 10) {
                             Image(systemName: "lock.fill")
                                 .foregroundStyle(.orange)
-                            Text("Les fonctionnalités agent sont bloquées tant qu’aucun abonnement n’est actif.")
+                            Text("Les fonctionnalités agent sont bloquées tant qu'aucun abonnement n'est actif.")
                                 .font(.footnote.weight(.medium))
                                 .foregroundStyle(.secondary)
                         }
@@ -2211,12 +3371,14 @@ private struct SubscriptionPlansView: View {
                             .padding(.horizontal, 4)
                     }
 
-                    Text("Paiement sécurisé via Stripe. Annulation possible à tout moment.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.top, 4)
-                        .padding(.bottom, 12)
+                    if SupabaseService.shared.isConfigured {
+                        Text("Abonnement activé pour la session TestFlight.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.top, 4)
+                            .padding(.bottom, 12)
+                    }
                 }
                 .padding(20)
             }
@@ -2395,6 +3557,7 @@ private struct AgentProjectDetailView: View {
     @Environment(AppViewModel.self) private var viewModel
 
     var body: some View {
+        @Bindable var viewModel = viewModel
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 ProjectOpportunityCardView(project: project)
@@ -2402,8 +3565,18 @@ private struct AgentProjectDetailView: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Détails du bien")
                         .font(.title3.bold())
-                    Text(project.fullAddress)
-                        .font(.headline)
+                    HStack(spacing: 8) {
+                        Text(project.propertyType.rawValue)
+                            .font(.headline)
+                        Text("·")
+                            .foregroundStyle(.secondary)
+                        Text(project.typology.rawValue)
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+                    }
+                    Label(project.locationLabel, systemImage: "mappin.circle")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
                     Text(project.description)
                         .font(.body)
                         .foregroundStyle(.secondary)
@@ -2412,23 +3585,16 @@ private struct AgentProjectDetailView: View {
 
                 PropertyPhotoStripView(photos: project.photos, height: 220)
 
-                if viewModel.hasApplied(to: project) {
-                    Button("Candidature envoyée") { }
-                        .buttonStyle(.borderedProminent)
-                        .frame(maxWidth: .infinity)
-                        .disabled(true)
-                } else {
-                    Button("Candidater à ce projet") {
-                        showApplicationSheet = true
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .frame(maxWidth: .infinity)
-                }
+                AgentApplyButton(project: project, onApply: { showApplicationSheet = true })
             }
             .padding(20)
         }
         .navigationTitle(project.title)
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $viewModel.showSubscriptionUpgradeSheet) {
+            SubscriptionUpgradePromptView()
+                .presentationDetents([.medium])
+        }
         .sheet(isPresented: $showApplicationSheet) {
             AgentApplicationComposerView(project: project)
                 .presentationDetents([.medium, .large])
@@ -2526,9 +3692,6 @@ private struct SellerFollowUpView: View {
                                     } else {
                                         expandedProjectIDs.insert(project.id)
                                     }
-                                },
-                                onOpenConversation: {
-                                    viewModel.sellerTab = .messages
                                 }
                             )
                         }
@@ -2545,14 +3708,11 @@ private struct SellerFollowUpCardView: View {
     let project: PropertyProject
     let isExpanded: Bool
     let onToggle: () -> Void
-    let onOpenConversation: () -> Void
 
-    private var chosenApplication: AgentApplication? {
-        project.applications.first { $0.status.lowercased() == "chosen" }
-    }
+    @Environment(AppViewModel.self) private var viewModel
 
-    private var agent: AgentProfile? {
-        chosenApplication?.agent
+    private var chosenApplications: [AgentApplication] {
+        project.applications.filter { $0.status.lowercased() == "chosen" }
     }
 
     var body: some View {
@@ -2571,7 +3731,10 @@ private struct SellerFollowUpCardView: View {
                                 .padding(16)
                         }
 
-                    Text(isExpanded ? "Masquer les détails de l’agent" : "Afficher les détails de l’agent")
+                    let count = chosenApplications.count
+                    Text(isExpanded
+                         ? "Masquer les details"
+                         : (count == 1 ? "1 agent selectionne" : "\(count) agents selectionnes"))
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
@@ -2579,44 +3742,62 @@ private struct SellerFollowUpCardView: View {
             }
             .buttonStyle(.plain)
 
-            if isExpanded, let agent {
-                Divider()
-
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("Agent sélectionné")
-                        .font(.headline)
-
-                    Text(agent.fullName)
-                        .font(.title3.bold())
-
-                    Text("Agence : \(agent.agencyName)")
+            if isExpanded {
+                if chosenApplications.isEmpty {
+                    Divider()
+                    Text("Aucun agent selectionne pour ce projet.")
                         .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 4)
+                } else {
+                    ForEach(chosenApplications) { application in
+                        Divider()
+                        VStack(alignment: .leading, spacing: 10) {
+                            HStack(spacing: 12) {
+                                AgentAvatarView(agent: application.agent, size: 46)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(application.agent.fullName)
+                                        .font(.headline)
+                                    Text(application.agent.agencyName)
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                StatusBadgeView(text: "Selectionne")
+                            }
 
-                    HStack(spacing: 8) {
-                        Label(String(format: "%.1f", agent.averageRating), systemImage: "star.fill")
-                            .foregroundStyle(.yellow)
+                            HStack(spacing: 6) {
+                                Label(
+                                    String(format: "%.1f %%", application.proposedCommission),
+                                    systemImage: "percent"
+                                )
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                                Text("·")
+                                    .foregroundStyle(.secondary)
+                                Label(application.agent.trustIndicators.memberSince, systemImage: "calendar")
+                                    .font(.footnote.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                            }
 
-                        Text("· \(agent.reviewCount) avis")
-                            .foregroundStyle(.secondary)
+                            Text(application.customMessage)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+
+                            Button {
+                                viewModel.openOrCreateConversation(application: application, project: project)
+                            } label: {
+                                let firstName = application.agent.fullName.components(separatedBy: " ").first ?? application.agent.fullName
+                                Label(
+                                    "Conversation avec \(firstName)",
+                                    systemImage: "bubble.left.and.bubble.right.fill"
+                                )
+                                .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
                     }
-                    .font(.subheadline.weight(.semibold))
-
-                    if let chosenApplication {
-                        Text("Commission : \(Int(chosenApplication.proposedCommission)) %")
-                            .font(.subheadline)
-
-                        Text("Message : “\(chosenApplication.customMessage)”")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Button {
-                        onOpenConversation()
-                    } label: {
-                        Label("Ouvrir la conversation", systemImage: "bubble.left.and.bubble.right.fill")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
                 }
             }
         }
@@ -2710,53 +3891,112 @@ private struct MandateDetailView: View {
     }
 }
 
-private struct MessagingHubView: View {
-    @Environment(AppViewModel.self) private var viewModel
-    
-    private func displayTitle(for conversation: Conversation) -> String {
-        if viewModel.selectedRole == .agent {
-            return conversation.messages.first(where: {
-                $0.senderRole == .seller && $0.senderName != "Store Immo"
-            })?.senderName ?? "Vendeur"
-        } else {
-            return conversation.title
-        }
-    }
-    
+private struct ConversationAvatarView: View {
+    let photoURL: String?
+    var size: CGFloat = 46
+
     var body: some View {
-        List(viewModel.conversations) { conversation in
-            NavigationLink(value: conversation.id) {
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: "bubble.left.and.bubble.right.fill")
-                        .font(.title3)
-                        .foregroundStyle(StoreImmoTheme.navy)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(displayTitle(for: conversation))
-                            .font(.headline)
-                        Text(conversation.projectTitle)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                        Text(
-                            viewModel.selectedRole == .agent &&
-                            conversation.lastMessagePreview.contains("agent")
-                            ? "Commencez la discussion avec le vendeur."
-                            : conversation.lastMessagePreview
-                        )
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    if conversation.unreadCount > 0 {
-                        Text("\(conversation.unreadCount)")
-                            .font(.caption.weight(.bold))
-                            .foregroundStyle(.white)
-                            .padding(8)
-                            .background(.blue, in: .circle)
-                    }
+        if let urlString = photoURL, let url = URL(string: urlString) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: size, height: size)
+                        .clipShape(.circle)
+                case .failure:
+                    premiumDefaultAvatar
+                default:
+                    Circle()
+                        .fill(Color(.systemGray5))
+                        .frame(width: size, height: size)
+                        .overlay {
+                            Image(systemName: "person.fill")
+                                .font(.system(size: size * 0.42))
+                                .foregroundStyle(Color(.systemGray3))
+                        }
                 }
             }
+            .frame(width: size, height: size)
+        } else {
+            premiumDefaultAvatar
         }
-        .listStyle(.insetGrouped)
+    }
+
+    private var premiumDefaultAvatar: some View {
+        Circle()
+            .fill(
+                LinearGradient(
+                    colors: [
+                        StoreImmoTheme.navy,
+                        Color(red: 25 / 255, green: 59 / 255, blue: 97 / 255)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .frame(width: size, height: size)
+            .overlay {
+                Image(systemName: "person.fill")
+                    .font(.system(size: size * 0.46))
+                    .foregroundStyle(.white.opacity(0.92))
+            }
+    }
+}
+
+private struct MessagingHubView: View {
+    @Environment(AppViewModel.self) private var viewModel
+
+    var body: some View {
+        Group {
+            if viewModel.conversations.isEmpty {
+                ContentUnavailableView {
+                    Label("Aucune conversation", systemImage: "bubble.left.and.bubble.right")
+                } description: {
+                    Text(viewModel.selectedRole == .agent
+                         ? "Lorsqu un vendeur vous selectionnera, vos echanges apparaitront ici."
+                         : "Choisissez un agent pour demarrer une discussion.")
+                }
+            } else {
+                List(viewModel.conversations) { conversation in
+                    NavigationLink(value: conversation.id) {
+                        HStack(alignment: .center, spacing: 12) {
+                            ConversationAvatarView(
+                                photoURL: conversation.participantPhotoURL,
+                                size: 46
+                            )
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(conversation.title)
+                                    .font(conversation.unreadCount > 0 ? .headline.bold() : .headline)
+                                Text(conversation.projectTitle)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                Text(
+                                    viewModel.selectedRole == .agent &&
+                                    conversation.lastMessagePreview.contains("agent")
+                                    ? "Commencez la discussion avec le vendeur."
+                                    : conversation.lastMessagePreview
+                                )
+                                .font(conversation.unreadCount > 0 ? .footnote.bold() : .footnote)
+                                .foregroundStyle(conversation.unreadCount > 0 ? .primary : .secondary)
+                                .lineLimit(1)
+                            }
+                            Spacer()
+                            if conversation.unreadCount > 0 {
+                                Text("\(conversation.unreadCount)")
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(.white)
+                                    .padding(8)
+                                    .background(.blue, in: .circle)
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+                .listStyle(.insetGrouped)
+            }
+        }
         .navigationTitle("Messages")
         .navigationDestination(for: UUID.self) { conversationID in
             if let conversation = viewModel.conversations.first(where: { $0.id == conversationID }) {
@@ -2775,15 +4015,7 @@ private struct ConversationDetailView: View {
         viewModel.conversations.first(where: { $0.id == conversation.id }) ?? conversation
     }
     private var displayedTitle: String {
-        if viewModel.selectedRole == .seller {
-            return liveConversation.title
-        } else {
-            return sellerNameFromMessages
-        }
-    }
-
-    private var sellerNameFromMessages: String {
-        liveConversation.messages.first(where: { $0.senderRole == .seller })?.senderName ?? "Vendeur"
+        liveConversation.title
     }
 
     private var introText: String {
@@ -2844,19 +4076,149 @@ private struct ConversationDetailView: View {
             .padding(16)
             .background(.bar)
         }
-        .navigationTitle(displayedTitle)
+        .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .principal) {
+                HStack(spacing: 9) {
+                    ConversationAvatarView(
+                        photoURL: liveConversation.participantPhotoURL,
+                        size: 34
+                    )
+                    Text(displayedTitle)
+                        .font(.headline)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .onAppear {
+            viewModel.markConversationAsRead(liveConversation)
+        }
     }
 }
 
 private struct ProfileSettingsView: View {
     let isAgent: Bool
     @Environment(AppViewModel.self) private var viewModel
+    @State private var photoPickerItem: PhotosPickerItem?
+    @State private var previewImage: UIImage?
+    @State private var isUploadingPhoto = false
+    @State private var showDeleteConfirmation = false
 
-    private let cities: [String] = ["Paris", "Bordeaux", "Lyon", "Nîmes", "Ajaccio"]
+    private let cities: [String] = [
+        "Ajaccio", "Aix-en-Provence", "Amiens", "Angers", "Annecy", "Avignon",
+        "Bastia", "Bayonne", "Besançon", "Biarritz", "Bordeaux", "Brest",
+        "Caen", "Cannes", "Clermont-Ferrand",
+        "Dijon", "Dunkerque",
+        "Grenoble",
+        "Le Havre", "Libourne", "Lille", "Limoges", "Lyon",
+        "Marseille", "Metz", "Montpellier", "Mulhouse",
+        "Nancy", "Nantes", "Nice", "Nîmes",
+        "Orléans",
+        "Paris", "Pau", "Perpignan", "Poitiers",
+        "Reims", "Rennes", "Rouen",
+        "Saint-Étienne", "Strasbourg",
+        "Toulon", "Toulouse", "Tours", "Troyes",
+        "Valenciennes"
+    ]
 
     var body: some View {
         List {
+            if isAgent {
+                Section("Photo de profil") {
+                    if let preview = previewImage {
+                        // Preview en attente de validation
+                        VStack(spacing: 18) {
+                            Image(uiImage: preview)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 76, height: 76)
+                                .clipShape(.circle)
+                                .overlay(Circle().stroke(Color(.systemGray4), lineWidth: 1))
+                            HStack(spacing: 12) {
+                                Button("Annuler") {
+                                    previewImage = nil
+                                    photoPickerItem = nil
+                                }
+                                .buttonStyle(.bordered)
+                                .frame(maxWidth: .infinity)
+                                Button {
+                                    guard let data = preview.jpegData(compressionQuality: 0.8) else { return }
+                                    isUploadingPhoto = true
+                                    Task {
+                                        await viewModel.uploadAndSaveAgentProfilePhoto(data)
+                                        isUploadingPhoto = false
+                                        previewImage = nil
+                                    }
+                                } label: {
+                                    if isUploadingPhoto {
+                                        ProgressView().tint(.white)
+                                    } else {
+                                        Text("Enregistrer")
+                                    }
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .frame(maxWidth: .infinity)
+                                .disabled(isUploadingPhoto)
+                            }
+                        }
+                        .padding(.vertical, 10)
+                        .frame(maxWidth: .infinity)
+                        .transition(.opacity)
+                    } else {
+                        // Affichage photo actuelle + actions
+                        let hasPhoto = viewModel.currentAgentProfile?.profilePhotoURL != nil
+                        VStack(alignment: .leading, spacing: 14) {
+                            HStack(spacing: 16) {
+                                if let profile = viewModel.currentAgentProfile {
+                                    AgentAvatarView(agent: profile, size: 76)
+                                        .overlay(Circle().stroke(Color(.systemGray4), lineWidth: 1))
+                                        .id(profile.profilePhotoURL ?? "none")
+                                        .transition(.opacity)
+                                }
+                                VStack(alignment: .leading, spacing: 12) {
+                                    PhotosPicker(selection: $photoPickerItem, matching: .images) {
+                                        Text(hasPhoto ? "Modifier la photo" : "Ajouter une photo")
+                                    }
+                                    if hasPhoto {
+                                        Button {
+                                            showDeleteConfirmation = true
+                                        } label: {
+                                            Text("Supprimer la photo")
+                                                .foregroundStyle(.red)
+                                        }
+                                        .font(.subheadline)
+                                    }
+                                }
+                                Spacer()
+                            }
+                            .padding(.vertical, 4)
+                            .animation(.easeInOut(duration: 0.25), value: viewModel.currentAgentProfile?.profilePhotoURL)
+
+                            Text("Votre photo sera visible par les vendeurs lorsque vous candidatez.")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .transition(.opacity)
+                    }
+                }
+                .onChange(of: photoPickerItem) { _, item in
+                    guard let item else { return }
+                    print("[Photo profil] Sélectionnée")
+                    Task {
+                        guard let data = try? await item.loadTransferable(type: Data.self),
+                              let image = UIImage(data: data) else {
+                            print("[Photo profil] Erreur: chargement image impossible")
+                            return
+                        }
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            previewImage = image
+                        }
+                        photoPickerItem = nil
+                    }
+                }
+            }
+
             Section("Notifications") {
                 Toggle("Push activées", isOn: Binding(get: { viewModel.isPushEnabled }, set: { viewModel.isPushEnabled = $0 }))
                 if isAgent {
@@ -2869,13 +4231,26 @@ private struct ProfileSettingsView: View {
                 }
             }
 
-            Section(isAgent ? "Abonnement" : "Confiance") {
+            Section(isAgent ? "Mon abonnement" : "Confiance") {
                 if isAgent {
-                    Label("Plan actuel : \(viewModel.selectedPlan.title)", systemImage: "crown.fill")
-                    Label("Paiement externe Stripe prêt", systemImage: "creditcard")
-                    Label("Flux feed local en direct", systemImage: "sparkles.rectangle.stack")
-                    if let profile = viewModel.currentAgentProfile {
-                        Label("Profil : \(profile.fullName)", systemImage: "person.crop.circle.badge.checkmark")
+                    if viewModel.hasChosenAgentSubscription {
+                        Label("Plan \(viewModel.selectedPlan.title) · actif", systemImage: viewModel.selectedPlan.iconName)
+                        Label(viewModel.selectedPlan.activeApplicationsLabel, systemImage: "person.badge.plus")
+                    } else {
+                        Label(
+                            viewModel.freeApplicationUsed
+                                ? "Candidature gratuite utilisée"
+                                : "1 candidature gratuite disponible",
+                            systemImage: viewModel.freeApplicationUsed ? "sparkles.slash" : "sparkles"
+                        )
+                        .foregroundStyle(viewModel.freeApplicationUsed ? .orange : .primary)
+                        Label("Sans abonnement actif", systemImage: "xmark.circle")
+                            .foregroundStyle(.secondary)
+                    }
+                    NavigationLink {
+                        SubscriptionPlansView(showsCloseButton: true)
+                    } label: {
+                        Label("Gérer mon abonnement", systemImage: "creditcard")
                     }
                 } else {
                     Label("RGPD friendly", systemImage: "lock.shield")
@@ -2883,6 +4258,7 @@ private struct ProfileSettingsView: View {
                 }
             }
 
+            #if DEBUG
             if isAgent {
                 Section("Tables Supabase à créer") {
                     NavigationLink("Voir le schéma nécessaire") {
@@ -2890,15 +4266,42 @@ private struct ProfileSettingsView: View {
                     }
                 }
             }
+            #endif
 
-            Section("Activité récente") {
-                ForEach(viewModel.notifications.prefix(3)) { item in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(item.title)
-                            .font(.headline)
-                        Text(item.body)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
+            Section("Notifications") {
+                if viewModel.notifications.isEmpty {
+                    Text("Aucune notification")
+                        .foregroundStyle(.secondary)
+                        .font(.subheadline)
+                } else {
+                    ForEach(viewModel.notifications) { item in
+                        Button {
+                            viewModel.openFromNotification(item)
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: item.symbolName)
+                                    .font(.title3)
+                                    .foregroundStyle(item.isRead ? Color(.secondaryLabel) : Color.blue)
+                                    .frame(width: 28)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(item.title)
+                                        .font(item.isRead ? .subheadline : .subheadline.bold())
+                                        .foregroundStyle(.primary)
+                                    Text(item.body)
+                                        .font(.footnote)
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(2)
+                                }
+                                Spacer()
+                                if !item.isRead {
+                                    Circle()
+                                        .fill(.blue)
+                                        .frame(width: 8, height: 8)
+                                }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }
@@ -2911,6 +4314,118 @@ private struct ProfileSettingsView: View {
         }
         .navigationTitle(isAgent ? "Profil agent" : "Mon profil")
         .listStyle(.insetGrouped)
+        .confirmationDialog(
+            "Supprimer la photo ?",
+            isPresented: $showDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Supprimer", role: .destructive) {
+                Task { await viewModel.removeAgentProfilePhoto() }
+            }
+            Button("Annuler", role: .cancel) {}
+        } message: {
+            Text("Cette action rétablira votre avatar par défaut.")
+        }
+    }
+}
+
+private struct OTPVerificationView: View {
+    @Environment(AppViewModel.self) private var viewModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var canResend = false
+
+    var body: some View {
+        @Bindable var viewModel = viewModel
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Vérification par email")
+                        .font(.largeTitle.bold())
+                    if let email = viewModel.pendingOTPEmail {
+                        Text("Un code de verification a ete envoye a **\(email)**.")
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                    }
+                    Text("Vérifiez aussi votre dossier spams.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Code de vérification")
+                        .font(.subheadline.weight(.semibold))
+                    TextField("Code de verification", text: $viewModel.otpCode)
+                        .textFieldStyle(.roundedBorder)
+                        .keyboardType(.numberPad)
+                        .textContentType(.oneTimeCode)
+                        .font(.title2.monospacedDigit())
+                        .multilineTextAlignment(.center)
+                }
+                .padding(16)
+                .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 16))
+
+                if let message = viewModel.appStatusMessage {
+                    Text(message)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(message.lowercased().contains("erreur") || message.lowercased().contains("trop") || message.lowercased().contains("impossible") ? .red : StoreImmoTheme.navy)
+                        .padding(.horizontal, 4)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Button {
+                    viewModel.submitOTPCode()
+                } label: {
+                    Group {
+                        if viewModel.isVerifyingOTP {
+                            ProgressView()
+                                .frame(maxWidth: .infinity)
+                        } else {
+                            Label("Vérifier le code", systemImage: "checkmark.shield.fill")
+                                .frame(maxWidth: .infinity)
+                        }
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .disabled(viewModel.otpCode.trimmingCharacters(in: .whitespaces).count < 4 || viewModel.isVerifyingOTP)
+
+                Button {
+                    viewModel.resendOTP()
+                    canResend = false
+                    Task {
+                        try? await Task.sleep(for: .seconds(30))
+                        canResend = true
+                    }
+                } label: {
+                    Text(canResend ? "Renvoyer le code" : "Renvoyer le code (30s)")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.large)
+                .disabled(!canResend || viewModel.isVerifyingOTP)
+
+                Spacer()
+            }
+            .padding(24)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Annuler") {
+                        viewModel.cancelOTP()
+                        dismiss()
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+        .onAppear {
+            canResend = false
+            Task {
+                try? await Task.sleep(for: .seconds(30))
+                canResend = true
+            }
+        }
     }
 }
 

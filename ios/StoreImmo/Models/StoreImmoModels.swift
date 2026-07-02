@@ -44,6 +44,18 @@ nonisolated enum PropertyType: String, CaseIterable, Identifiable, Sendable {
     var id: String { rawValue }
 }
 
+nonisolated enum PropertyTypology: String, CaseIterable, Identifiable, Sendable {
+    case studio = "Studio"
+    case t1 = "T1"
+    case t2 = "T2"
+    case t3 = "T3"
+    case t4 = "T4"
+    case t5Plus = "T5+"
+    case autre = "Autre"
+
+    var id: String { rawValue }
+}
+
 nonisolated enum ProjectStatus: String, CaseIterable, Identifiable, Sendable {
     case draft = "Brouillon"
     case published = "Publié"
@@ -51,6 +63,7 @@ nonisolated enum ProjectStatus: String, CaseIterable, Identifiable, Sendable {
     case agentChosen = "Agent choisi"
     case underMandate = "Sous mandat"
     case sold = "Vendu"
+    case deleted = "Supprimé"
 
     var id: String { rawValue }
 
@@ -68,6 +81,8 @@ nonisolated enum ProjectStatus: String, CaseIterable, Identifiable, Sendable {
             "Commercialisation"
         case .sold:
             "Clôturé"
+        case .deleted:
+            "Supprimé"
         }
     }
 }
@@ -259,6 +274,12 @@ nonisolated struct Review: Identifiable, Hashable, Sendable {
     }
 }
 
+nonisolated struct AgentTrustIndicators: Sendable {
+    let memberSince: String
+    let responseTime: String
+    let recentActivity: String
+}
+
 nonisolated struct AgentProfile: Identifiable, Hashable, Sendable {
     let id: UUID
     let fullName: String
@@ -277,6 +298,8 @@ nonisolated struct AgentProfile: Identifiable, Hashable, Sendable {
     let reviews: [Review]
     let photoSymbol: String
     let plan: SubscriptionPlan
+    let memberSinceDate: Date?
+    let profilePhotoURL: String?
 
     init(
         id: UUID = UUID(),
@@ -295,7 +318,9 @@ nonisolated struct AgentProfile: Identifiable, Hashable, Sendable {
         interventionZones: [CityZone],
         reviews: [Review],
         photoSymbol: String,
-        plan: SubscriptionPlan
+        plan: SubscriptionPlan,
+        memberSinceDate: Date? = nil,
+        profilePhotoURL: String? = nil
     ) {
         self.id = id
         self.fullName = fullName
@@ -314,6 +339,41 @@ nonisolated struct AgentProfile: Identifiable, Hashable, Sendable {
         self.reviews = reviews
         self.photoSymbol = photoSymbol
         self.plan = plan
+        self.memberSinceDate = memberSinceDate
+        self.profilePhotoURL = profilePhotoURL
+    }
+
+    var trustIndicators: AgentTrustIndicators {
+        AgentTrustIndicators(
+            memberSince: memberSinceLabel,
+            responseTime: "Temps de réponse en cours de calcul",
+            recentActivity: recentActivityLabel
+        )
+    }
+
+    private var memberSinceLabel: String {
+        guard let date = memberSinceDate else { return "Nouveau membre" }
+        let months = Calendar.current.dateComponents([.month], from: date, to: Date()).month ?? 0
+        if months < 1 { return "Membre depuis ce mois-ci" }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+        formatter.locale = Locale(identifier: "fr_FR")
+        return "Membre depuis \(formatter.string(from: date))"
+    }
+
+    private var recentActivityLabel: String {
+        guard let date = memberSinceDate else { return "Nouveau membre" }
+        let days = Calendar.current.dateComponents([.day], from: date, to: Date()).day ?? 0
+        if days < 30 { return "Nouveau membre" }
+        if days < 90 { return "Actif récemment" }
+        return "Actif récemment"
+    }
+
+    static func responseTimeLabel(_ minutes: Double) -> String {
+        if minutes < 10 { return "Répond en moins de 10 min" }
+        if minutes < 60 { return "Répond en moins d'1h" }
+        if minutes < 1440 { return "Répond dans la journée" }
+        return "Temps de réponse variable"
     }
 }
 
@@ -325,8 +385,9 @@ nonisolated struct AgentApplication: Identifiable, Hashable, Sendable {
     let customMessage: String
     let status: String
     let appliedAt: Date
+    let sellerHasSeen: Bool
 
-    init(id: UUID = UUID(), projectID: UUID, agent: AgentProfile, proposedCommission: Double, customMessage: String, status: String = "pending", appliedAt: Date) {
+    init(id: UUID = UUID(), projectID: UUID, agent: AgentProfile, proposedCommission: Double, customMessage: String, status: String = "pending", appliedAt: Date, sellerHasSeen: Bool = false) {
         self.id = id
         self.projectID = projectID
         self.agent = agent
@@ -334,6 +395,7 @@ nonisolated struct AgentApplication: Identifiable, Hashable, Sendable {
         self.customMessage = customMessage
         self.status = status
         self.appliedAt = appliedAt
+        self.sellerHasSeen = sellerHasSeen
     }
 }
 
@@ -394,6 +456,7 @@ nonisolated struct PropertyProject: Identifiable, Hashable, Sendable {
     let city: String
     let postalCode: String
     let propertyType: PropertyType
+    let typology: PropertyTypology
     let description: String
     let desiredPrice: Int
     let idealListingDate: Date
@@ -405,6 +468,12 @@ nonisolated struct PropertyProject: Identifiable, Hashable, Sendable {
     let requiredRegion: String
     let districtLabel: String
     let feedHighlight: String
+    /// Supabase `seller_id` — present when the project was loaded from DB.
+    /// Passed to `applications` insert so RLS can authorise seller reads.
+    let sellerID: String?
+
+    /// City and postal code only — safe to display to agents (no street-level detail).
+    var locationLabel: String { "\(postalCode) · \(city)" }
 
     init(
         id: UUID = UUID(),
@@ -413,6 +482,7 @@ nonisolated struct PropertyProject: Identifiable, Hashable, Sendable {
         city: String,
         postalCode: String,
         propertyType: PropertyType,
+        typology: PropertyTypology = .autre,
         description: String,
         desiredPrice: Int,
         idealListingDate: Date,
@@ -423,7 +493,8 @@ nonisolated struct PropertyProject: Identifiable, Hashable, Sendable {
         selectedAgentID: UUID?,
         requiredRegion: String,
         districtLabel: String,
-        feedHighlight: String
+        feedHighlight: String,
+        sellerID: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -431,6 +502,7 @@ nonisolated struct PropertyProject: Identifiable, Hashable, Sendable {
         self.city = city
         self.postalCode = postalCode
         self.propertyType = propertyType
+        self.typology = typology
         self.description = description
         self.desiredPrice = desiredPrice
         self.idealListingDate = idealListingDate
@@ -442,6 +514,7 @@ nonisolated struct PropertyProject: Identifiable, Hashable, Sendable {
         self.requiredRegion = requiredRegion
         self.districtLabel = districtLabel
         self.feedHighlight = feedHighlight
+        self.sellerID = sellerID
     }
 }
 
@@ -479,6 +552,11 @@ nonisolated struct Conversation: Identifiable, Hashable, Sendable {
     let unreadCount: Int
     let projectTitle: String
     let messages: [ChatMessage]
+    let agentId: UUID?
+    let sellerId: UUID?
+    let projectId: UUID?
+    /// URL de la photo de l'autre participant (agent ou vendeur).
+    let participantPhotoURL: String?
 
     init(
         id: UUID = UUID(),
@@ -487,7 +565,11 @@ nonisolated struct Conversation: Identifiable, Hashable, Sendable {
         lastMessagePreview: String,
         unreadCount: Int,
         projectTitle: String,
-        messages: [ChatMessage]
+        messages: [ChatMessage],
+        agentId: UUID? = nil,
+        sellerId: UUID? = nil,
+        projectId: UUID? = nil,
+        participantPhotoURL: String? = nil
     ) {
         self.id = id
         self.title = title
@@ -496,6 +578,10 @@ nonisolated struct Conversation: Identifiable, Hashable, Sendable {
         self.unreadCount = unreadCount
         self.projectTitle = projectTitle
         self.messages = messages
+        self.agentId = agentId
+        self.sellerId = sellerId
+        self.projectId = projectId
+        self.participantPhotoURL = participantPhotoURL
     }
 }
 
@@ -505,13 +591,31 @@ nonisolated struct NotificationItem: Identifiable, Hashable, Sendable {
     let body: String
     let symbolName: String
     let date: Date
+    let type: String
+    let isRead: Bool
+    let relatedProjectId: UUID?
+    let relatedConversationId: UUID?
 
-    init(id: UUID = UUID(), title: String, body: String, symbolName: String, date: Date) {
+    init(
+        id: UUID = UUID(),
+        title: String,
+        body: String,
+        symbolName: String,
+        date: Date,
+        type: String = "system",
+        isRead: Bool = false,
+        relatedProjectId: UUID? = nil,
+        relatedConversationId: UUID? = nil
+    ) {
         self.id = id
         self.title = title
         self.body = body
         self.symbolName = symbolName
         self.date = date
+        self.type = type
+        self.isRead = isRead
+        self.relatedProjectId = relatedProjectId
+        self.relatedConversationId = relatedConversationId
     }
 }
 
@@ -520,6 +624,7 @@ nonisolated struct SellerLeadDraft: Sendable {
     var city: String = ""
     var postalCode: String = ""
     var propertyType: PropertyType = .apartment
+    var typology: PropertyTypology = .t3
     var description: String = ""
     var desiredPrice: String = ""
     var idealListingDate: Date = .now.addingTimeInterval(60 * 60 * 24 * 21)
@@ -593,7 +698,7 @@ nonisolated enum AppTabAgent: Hashable, Sendable {
     case profile
 }
 extension String {
-    var isValidEmail: Bool {
+    nonisolated var isValidEmail: Bool {
         let pattern = #"^[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"#
         return range(of: pattern, options: .regularExpression) != nil
     }

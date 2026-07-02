@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import UserNotifications
+import UIKit
 
 @Observable
 @MainActor
@@ -10,13 +11,25 @@ final class StoreImmoNotificationService {
     func refreshAuthorizationStatus() async {
         let settings = await UNUserNotificationCenter.current().notificationSettings()
         authorizationStatus = settings.authorizationStatus
+        if authorizationStatus == .authorized {
+            UIApplication.shared.registerForRemoteNotifications()
+        }
     }
 
     func requestAuthorizationIfNeeded() async {
-        guard authorizationStatus == .notDetermined else { return }
+        guard authorizationStatus == .notDetermined else {
+            if authorizationStatus == .authorized {
+                UIApplication.shared.registerForRemoteNotifications()
+            }
+            return
+        }
         do {
             let granted = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge])
             authorizationStatus = granted ? .authorized : .denied
+            if granted {
+                UIApplication.shared.registerForRemoteNotifications()
+                print("[Push] Enregistrement APNs demandé")
+            }
         } catch {
             authorizationStatus = .denied
         }

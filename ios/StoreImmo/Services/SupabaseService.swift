@@ -33,13 +33,19 @@ final class SupabaseService {
     
     // MARK: - Auth helpers
     
-    func signInWithOTP(email: String) async {
-        guard let client else { return }
+    @discardableResult
+    func signInWithOTP(email: String) async -> Bool {
+        guard let client else {
+            lastError = "Client Supabase non initialisé."
+            return false
+        }
         do {
             try await client.auth.signInWithOTP(email: email)
             lastError = nil
+            return true
         } catch {
             lastError = error.localizedDescription
+            return false
         }
     }
     
@@ -50,6 +56,18 @@ final class SupabaseService {
             lastError = nil
         } catch {
             lastError = error.localizedDescription
+        }
+    }
+
+    func verifyOTP(email: String, token: String) async -> Bool {
+        guard let client else { return false }
+        do {
+            try await client.auth.verifyOTP(email: email, token: token, type: .email)
+            lastError = nil
+            return true
+        } catch {
+            lastError = error.localizedDescription
+            return false
         }
     }
     

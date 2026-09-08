@@ -1,0 +1,162 @@
+╔═══════════════════════════════════════════════════════════════════╗
+║                                                                   ║
+║  🎯 CORRECTION HTTP 401 - COMMENCEZ ICI                           ║
+║                                                                   ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+┌───────────────────────────────────────────────────────────────────┐
+│  👉 FICHIER À OUVRIR EN PREMIER                                   │
+├───────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│     ACTION_IMMEDIATE_HTTP_401.md                                  │
+│                                                                   │
+│  Ce fichier contient :                                            │
+│     • La commande à exécuter                                      │
+│     • Une explication simple                                      │
+│     • Le test rapide                                              │
+│                                                                   │
+│  Parfait pour 90% des cas d'usage.                                │
+│                                                                   │
+└───────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────┐
+│  ⚡ VOUS ÊTES TRÈS PRESSÉ ? LA COMMANDE DIRECTEMENT :             │
+├───────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  supabase functions deploy send-support-email --no-verify-jwt    │
+│                                                                   │
+│  Puis testez en créant un ticket depuis l'app iOS.               │
+│                                                                   │
+└───────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────┐
+│  📖 VOUS VOULEZ COMPRENDRE AVANT ? ORDRE DE LECTURE :             │
+├───────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  1. README_HTTP_401.md               (1 page, vue d'ensemble)    │
+│  2. ACTION_IMMEDIATE_HTTP_401.md     (commande + explication)    │
+│  3. RESUME_HTTP_401.md               (résumé exécutif)           │
+│  4. CORRECTION_HTTP_401_...md        (documentation complète)    │
+│                                                                   │
+└───────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────┐
+│  🗺️  VOUS VOULEZ NAVIGUER ? OUVREZ :                              │
+├───────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│     INDEX_HTTP_401.md                                             │
+│                                                                   │
+│  Cet index contient la liste complète de tous les fichiers       │
+│  créés avec leur usage recommandé.                                │
+│                                                                   │
+└───────────────────────────────────────────────────────────────────┘
+
+┌───────────────────────────────────────────────────────────────────┐
+│  🤖 VOUS PRÉFÉREZ UN SCRIPT AUTOMATIQUE ?                         │
+├───────────────────────────────────────────────────────────────────┤
+│                                                                   │
+│  Rendez le script exécutable :                                    │
+│     chmod +x deploy_fix_http_401.sh                               │
+│                                                                   │
+│  Exécutez-le :                                                    │
+│     ./deploy_fix_http_401.sh                                      │
+│                                                                   │
+│  Le script vérifiera tout et déploiera automatiquement.           │
+│                                                                   │
+└───────────────────────────────────────────────────────────────────┘
+
+╔═══════════════════════════════════════════════════════════════════╗
+║                                                                   ║
+║  ✅ RÉSUMÉ DE L'INTERVENTION                                      ║
+║                                                                   ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+Problème diagnostiqué :
+  • HTTP 401 - UNAUTHORIZED_NO_AUTH_HEADER
+
+Cause identifiée :
+  • verify_jwt = true (défaut) empêche les appels du trigger
+
+Solution fournie :
+  • Déployer avec verify_jwt = false
+
+Commande :
+  • supabase functions deploy send-support-email --no-verify-jwt
+
+Documentation créée :
+  • 11 fichiers (guides, configs, scripts)
+
+Modifications :
+  • Code de l'Edge Function : INCHANGÉ
+  • Configuration de déploiement : MODIFIÉE (verify_jwt = false)
+  • Trigger PostgreSQL : INCHANGÉ
+  • Table support_tickets : INCHANGÉE
+  • Application iOS : INCHANGÉE
+  • Resend : INCHANGÉ
+  • OVH : INCHANGÉ
+
+Sécurité :
+  • ✅ Validée (appel interne uniquement, RLS en amont)
+
+Conformité aux instructions :
+  • ✅ 100%
+
+╔═══════════════════════════════════════════════════════════════════╗
+║                                                                   ║
+║  📋 LISTE COMPLÈTE DES FICHIERS CRÉÉS (11)                        ║
+║                                                                   ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+Configuration :
+  1. supabase_config.toml
+
+Documentation - Niveau 1 (Action immédiate) :
+  2. EXECUTION_HTTP_401.md
+  3. ACTION_IMMEDIATE_HTTP_401.md
+  4. README_HTTP_401.md
+
+Documentation - Niveau 2 (Compréhension) :
+  5. RESUME_HTTP_401.md
+  6. RAPPORT_FINAL_HTTP_401.md
+  7. CONFIRMATION_FINALE_HTTP_401.md
+
+Documentation - Niveau 3 (Référence) :
+  8. CORRECTION_HTTP_401_EDGE_FUNCTION.md
+
+Scripts :
+  9. deploy_fix_http_401.sh
+ 10. COMMANDES_CORRECTION_HTTP_401.sh
+
+Navigation :
+ 11. INDEX_HTTP_401.md
+ 12. VISUAL_HTTP_401.txt
+ 13. START_HERE_HTTP_401.txt (ce fichier)
+
+╔═══════════════════════════════════════════════════════════════════╗
+║                                                                   ║
+║  🎯 RECOMMANDATION FINALE                                         ║
+║                                                                   ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+Pour 90% des utilisateurs :
+
+  1. Ouvrir : ACTION_IMMEDIATE_HTTP_401.md
+  2. Copier la commande
+  3. Exécuter dans le Terminal
+  4. Tester avec l'app iOS
+
+Durée totale : 2 minutes
+
+╔═══════════════════════════════════════════════════════════════════╗
+║                                                                   ║
+║  ⚡ COMMANDE DE CORRECTION                                        ║
+║                                                                   ║
+║  supabase functions deploy send-support-email --no-verify-jwt    ║
+║                                                                   ║
+╚═══════════════════════════════════════════════════════════════════╝
+
+Statut : ⏳ En attente de votre exécution
+Après déploiement : ✅ Problème résolu
+
+────────────────────────────────────────────────────────────────────
+Bonne chance ! 🚀

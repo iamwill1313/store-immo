@@ -1,0 +1,66 @@
+═══════════════════════════════════════════════════════════════
+✅ MODIFICATION COMPTE VENDEUR — RÉFÉRENCE RAPIDE
+═══════════════════════════════════════════════════════════════
+
+🚀 COMPILATION : ⌘ + B
+
+═══════════════════════════════════════════════════════════════
+
+📝 FICHIERS MODIFIÉS (3)
+
+1. SupabaseRepository.swift
+   + updateSellerProfileInfo()
+
+2. AppViewModel.swift
+   + updateSellerPersonalInfo()
+
+3. PersonalInfoView.swift
+   → Édition vendeur activée
+
+═══════════════════════════════════════════════════════════════
+
+✅ COMPTE VENDEUR — NOUVELLE FONCTIONNALITÉ
+
+Compte → Mon profil → Informations personnelles
+
+┌─────────────────────┐
+│  [Photo icône]      │   ← Photo de profil (icône)
+│                     │
+│  Prénom      ✏️     │   ← Modifiable
+│  Nom         ✏️     │   ← Modifiable
+│  Email       🔒     │   ← Lecture seule
+│  Téléphone   ✏️     │   ← Modifiable
+│                     │
+│  [Modifier]         │   ← Bouton toolbar
+└─────────────────────┘
+
+═══════════════════════════════════════════════════════════════
+
+✅ COMPTE AGENT — INCHANGÉ
+
+Toutes les fonctionnalités agent sont intactes.
+
+═══════════════════════════════════════════════════════════════
+
+🎯 RÉSULTAT
+
+Agent et Vendeur ont maintenant la même interface.
+
+Seules les fonctionnalités métier diffèrent.
+
+═══════════════════════════════════════════════════════════════
+
+📚 DOCUMENTATION COMPLÈTE
+
+• MODIFICATION_COMPTE_VENDEUR_RESUME.txt
+• MODIFICATION_COMPTE_VENDEUR_DETAILS.md
+• MODIFICATION_COMPTE_VENDEUR_SYNTHESE.txt
+• COMPILATION_COMPTE_VENDEUR.md
+• VERIFICATION_COMPTE_VENDEUR.txt
+
+═══════════════════════════════════════════════════════════════
+
+Date : 8 septembre 2026
+Statut : ✅ PRÊT À COMPILER
+
+═══════════════════════════════════════════════════════════════

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		17EDACB8304B5DFC005A2F53 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17EDACB7304B5DFC005A2F53 /* Config.swift */; };
 		XX50D61ED0BAE05FA2F8E9XX /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = XX1C9FF110ABBCE8BF456CXX /* Supabase */; };
 /* End PBXBuildFile section */
 
@@ -31,6 +32,7 @@
 		105FC57A2E9EAD3100EA8BCF /* StoreImmo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StoreImmo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		105FC5892E9EAD3200EA8BCF /* StoreImmoTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StoreImmoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		105FC5932E9EAD3200EA8BCF /* StoreImmoUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StoreImmoUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		17EDACB7304B5DFC005A2F53 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -80,6 +82,7 @@
 		105FC5712E9EAD3100EA8BCF = {
 			isa = PBXGroup;
 			children = (
+				17EDACB7304B5DFC005A2F53 /* Config.swift */,
 				105FC57C2E9EAD3100EA8BCF /* StoreImmo */,
 				105FC58C2E9EAD3200EA8BCF /* StoreImmoTests */,
 				105FC5962E9EAD3200EA8BCF /* StoreImmoUITests */,
@@ -245,6 +248,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				17EDACB8304B5DFC005A2F53 /* Config.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -598,6 +602,8 @@
 				kind = upToNextMajorVersion;
 				minimumVersion = 2.0.0;
 			};
+			traits = (
+			);
 		};
 /* End XCRemoteSwiftPackageReference section */
 

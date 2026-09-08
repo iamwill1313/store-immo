@@ -1,0 +1,44 @@
+[project]
+# Référence du projet Supabase
+# Remplacez par votre vrai project_ref si vous utilisez `supabase link`
+# project_id = "VOTRE_PROJECT_REF"
+
+[api]
+# Port du serveur API local (développement)
+port = 54321
+# Schémas exposés via l'API REST
+schemas = ["public"]
+# Taille maximale des payloads (en bytes)
+max_rows = 1000
+
+[db]
+# Port PostgreSQL local (développement)
+port = 54322
+# Version PostgreSQL
+major_version = 15
+
+[studio]
+# Port du Supabase Studio local
+port = 54323
+
+[auth]
+# Durée de validité des tokens JWT (en secondes)
+jwt_expiry = 3600
+# Activer le refresh automatique des tokens
+enable_signup = true
+
+[functions.send-support-email]
+# Configuration spécifique pour l'Edge Function send-support-email
+# Cette fonction doit accepter les appels provenant du trigger PostgreSQL
+# sans vérifier le JWT utilisateur
+
+# ⚠️ IMPORTANT : Désactive la vérification JWT
+# Cela permet au trigger PostgreSQL de l'appeler directement
+verify_jwt = false
+
+# CORS : autoriser tous les domaines (local + production)
+# En production, vous pouvez restreindre à votre domaine
+cors_origins = ["*"]
+
+# Variables d'environnement requises (définies via `supabase secrets set`)
+# - RESEND_API_KEY : Clé API Resend pour l'envoi d'emails

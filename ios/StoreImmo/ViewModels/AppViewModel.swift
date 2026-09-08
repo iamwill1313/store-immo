@@ -77,6 +77,8 @@ final class AppViewModel {
     var otpCode: String = ""
     var isVerifyingOTP: Bool = false
     var inAppBanner: NotificationItem? = nil
+    var supportTickets: [SupportTicket] = []
+    var notificationSettings: NotificationSettings = NotificationSettings()
 
     private var sellerProfileFirstName: String = ""
     private var sellerProfileLastName: String = ""
@@ -322,7 +324,8 @@ final class AppViewModel {
             SupabaseTableRequirement(name: "reviews", purpose: "Avis vérifiés après fin de mandat.", requiredColumns: ["id uuid primary key", "project_id uuid references sellers_projects", "agent_id uuid references agents_profiles", "seller_id uuid references users", "rating numeric", "comment text", "outcome_tag text", "created_at timestamptz"]),
             SupabaseTableRequirement(name: "notifications", purpose: "Notifications transactionnelles in-app et push.", requiredColumns: ["id uuid primary key", "user_id uuid references users", "title text", "body text", "type text", "is_read boolean default false", "created_at timestamptz"]),
             SupabaseTableRequirement(name: "appointments", purpose: "RDV liés aux mandats.", requiredColumns: ["id uuid primary key", "project_id uuid references sellers_projects", "title text", "scheduled_at timestamptz", "location text", "note text", "reminder_at timestamptz"]),
-            SupabaseTableRequirement(name: "mandates", purpose: "Mandats digitaux et suivi commercialisation.", requiredColumns: ["id uuid primary key", "project_id uuid references sellers_projects", "agent_id uuid references agents_profiles", "seller_id uuid references users", "status text", "valuation_notice text", "mandate_file_url text", "signed_at timestamptz"])
+            SupabaseTableRequirement(name: "mandates", purpose: "Mandats digitaux et suivi commercialisation.", requiredColumns: ["id uuid primary key", "project_id uuid references sellers_projects", "agent_id uuid references agents_profiles", "seller_id uuid references users", "status text", "valuation_notice text", "mandate_file_url text", "signed_at timestamptz"]),
+            SupabaseTableRequirement(name: "support_tickets", purpose: "Tickets de support utilisateur.", requiredColumns: ["id uuid primary key", "user_id uuid references users", "category text", "subject text", "message text", "status text default 'Nouvelle'", "user_role text", "app_version text", "created_at timestamptz", "updated_at timestamptz"])
         ]
     }
 
@@ -2289,6 +2292,123 @@ final class AppViewModel {
             )
         }
         print("[Photo profil] Suppression réussie")
+    }
+    
+    func updateAgentPersonalInfo(
+        firstName: String,
+        lastName: String,
+        phone: String,
+        city: String,
+        agency: String,
+        description: String
+    ) async -> Bool {
+        let agentID = SupabaseRepository.shared.currentUserID
+        let success = await SupabaseRepository.shared.updateAgentProfileInfo(
+            agentID: agentID,
+            firstName: firstName,
+            lastName: lastName,
+            phone: phone,
+            city: city,
+            agency: agency,
+            description: description
+        )
+        
+        if success {
+            // Mise à jour locale pour refléter immédiatement les changements
+            currentAgentProfile = currentAgentProfile.map { profile in
+                AgentProfile(
+                    id: profile.id,
+                    fullName: "\(firstName) \(lastName)",
+                    agencyName: agency.isEmpty ? "Indépendant" : agency,
+                    city: city,
+                    badge: profile.badge,
+                    bio: description,
+                    averageRating: profile.averageRating,
+                    reviewCount: profile.reviewCount,
+                    salesLast12Months: profile.salesLast12Months,
+                    soldRate: profile.soldRate,
+                    averageSalePrice: profile.averageSalePrice,
+                    averageDelayDays: profile.averageDelayDays,
+                    commissionPercent: profile.commissionPercent,
+                    interventionZones: profile.interventionZones,
+                    reviews: profile.reviews,
+                    photoSymbol: profile.photoSymbol,
+                    plan: profile.plan,
+                    memberSinceDate: profile.memberSinceDate,
+                    profilePhotoURL: profile.profilePhotoURL
+                )
+            }
+            // Mise à jour du draft également
+            agentOnboardingDraft.firstName = firstName
+            agentOnboardingDraft.lastName = lastName
+            agentOnboardingDraft.phoneNumber = phone
+            agentOnboardingDraft.city = city
+            agentOnboardingDraft.agency = agency
+            agentOnboardingDraft.professionalDescription = description
+            agentBaseCity = city
+        }
+        
+        return success
+    }
+    
+    func updateSellerPersonalInfo(
+        firstName: String,
+        lastName: String,
+        phone: String
+    ) async -> Bool {
+        let sellerID = SupabaseRepository.shared.currentUserID
+        let success = await SupabaseRepository.shared.updateSellerProfileInfo(
+            sellerID: sellerID,
+            firstName: firstName,
+            lastName: lastName,
+            phone: phone
+        )
+        
+        if success {
+            // Mise à jour locale pour refléter immédiatement les changements
+            sellerProfileFirstName = firstName
+            sellerProfileLastName = lastName
+            sellerPhoneNumber = phone
+            // Mise à jour du draft également
+            sellerOnboardingDraft.firstName = firstName
+            sellerOnboardingDraft.lastName = lastName
+            sellerOnboardingDraft.phoneNumber = phone
+        }
+        
+        return success
+    }
+
+    // MARK: - Support Tickets
+
+    func submitSupportTicket(category: SupportCategory, subject: String, message: String) async {
+        let ticket = SupportTicket(
+            category: category,
+            subject: subject,
+            message: message
+        )
+        
+        if SupabaseRepository.shared.isConfigured {
+            let success = await SupabaseRepository.shared.saveSupportTicket(
+                ticket: ticket,
+                userRole: selectedRole?.rawValue ?? "unknown",
+                appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+            )
+            if success {
+                supportTickets.insert(ticket, at: 0)
+                appStatusMessage = "Votre demande a été envoyée avec succès."
+            } else {
+                appStatusMessage = "Erreur lors de l'envoi de votre demande. Veuillez réessayer."
+            }
+        } else {
+            // Mode local/demo
+            supportTickets.insert(ticket, at: 0)
+            appStatusMessage = "Votre demande a été enregistrée (mode démo)."
+        }
+    }
+    
+    func loadSupportTickets() async {
+        guard SupabaseRepository.shared.isConfigured, isAuthenticated else { return }
+        supportTickets = await SupabaseRepository.shared.fetchSupportTickets()
     }
 
     func loadAgentApplicationsFromSupabase() async {

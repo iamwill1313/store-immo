@@ -1344,6 +1344,60 @@ final class SupabaseRepository {
             return false
         }
     }
+    
+    func updateAgentProfileInfo(
+        agentID: String,
+        firstName: String,
+        lastName: String,
+        phone: String,
+        city: String,
+        agency: String,
+        description: String
+    ) async -> Bool {
+        guard let client = service.client else { return false }
+        do {
+            try await client.from("agents_profiles")
+                .update([
+                    "first_name": firstName,
+                    "last_name": lastName,
+                    "phone": phone,
+                    "city": city,
+                    "agency": agency.isEmpty ? String?.none : agency,
+                    "description": description.isEmpty ? String?.none : description
+                ])
+                .eq("user_id", value: agentID)
+                .execute()
+            print("✅ Profil agent mis à jour")
+            return true
+        } catch {
+            print("🚨 updateAgentProfileInfo erreur:", error)
+            return false
+        }
+    }
+    
+    func updateSellerProfileInfo(
+        sellerID: String,
+        firstName: String,
+        lastName: String,
+        phone: String
+    ) async -> Bool {
+        guard let client = service.client else { return false }
+        do {
+            try await client.from("sellers_profiles")
+                .update([
+                    "first_name": firstName,
+                    "last_name": lastName,
+                    "phone": phone
+                ])
+                .eq("user_id", value: sellerID)
+                .execute()
+            print("✅ Profil vendeur mis à jour")
+            return true
+        } catch {
+            print("🚨 updateSellerProfileInfo erreur:", error)
+            return false
+        }
+    }
 
     private func fetchAgentAverageResponseMinutes(agentID: String) async -> Double? {
         guard let client = service.client else { return nil }
@@ -1389,4 +1443,101 @@ final class SupabaseRepository {
             return nil
         }
     }
+    
+    // MARK: - Support Tickets
+    
+    func saveSupportTicket(ticket: SupportTicket, userRole: String, appVersion: String) async -> Bool {
+        guard isConfigured, let client = service.client else { return false }
+        await bootstrapAuth()
+        let userID = currentUserID
+        
+        let row = SupportTicketInsertRow(
+            id: ticket.id.uuidString.lowercased(),
+            user_id: userID,
+            category: ticket.category.rawValue,
+            subject: ticket.subject,
+            message: ticket.message,
+            status: ticket.status.rawValue,
+            user_role: userRole,
+            app_version: appVersion,
+            created_at: ISO8601DateFormatter().string(from: ticket.createdAt)
+        )
+        
+        do {
+            _ = try await client
+                .from("support_tickets")
+                .insert(row)
+                .execute()
+            print("✅ Ticket de support enregistré:", ticket.id.uuidString.prefix(8))
+            return true
+        } catch {
+            print("🚨 saveSupportTicket erreur:", error)
+            return false
+        }
+    }
+    
+    func fetchSupportTickets() async -> [SupportTicket] {
+        guard isConfigured, let client = service.client else { return [] }
+        await bootstrapAuth()
+        let userID = currentUserID
+        
+        do {
+            let rows: [SupportTicketRow] = try await client
+                .from("support_tickets")
+                .select()
+                .eq("user_id", value: userID)
+                .order("created_at", ascending: false)
+                .execute()
+                .value
+            
+            let isoFormatter = ISO8601DateFormatter()
+            return rows.compactMap { row in
+                guard let category = SupportCategory(rawValue: row.category),
+                      let status = SupportTicketStatus(rawValue: row.status),
+                      let createdAt = row.created_at.flatMap({ isoFormatter.date(from: $0) }) else {
+                    return nil
+                }
+                
+                let updatedAt = row.updated_at.flatMap { isoFormatter.date(from: $0) }
+                
+                return SupportTicket(
+                    id: UUID(uuidString: row.id) ?? UUID(),
+                    category: category,
+                    subject: row.subject,
+                    message: row.message,
+                    status: status,
+                    createdAt: createdAt,
+                    updatedAt: updatedAt
+                )
+            }
+        } catch {
+            print("🚨 fetchSupportTickets erreur:", error)
+            return []
+        }
+    }
+}
+
+nonisolated struct SupportTicketInsertRow: Encodable, Sendable {
+    let id: String
+    let user_id: String
+    let category: String
+    let subject: String
+    let message: String
+    let status: String
+    let user_role: String
+    let app_version: String
+    let created_at: String
+}
+
+nonisolated struct SupportTicketRow: Codable, Sendable {
+    let id: String
+    let user_id: String
+    let category: String
+    let subject: String
+    let message: String
+    let status: String
+    let user_role: String?
+    let app_version: String?
+    let created_at: String?
+    let updated_at: String?
 }

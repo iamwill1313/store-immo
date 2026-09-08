@@ -743,9 +743,9 @@ private struct SellerRootView: View {
                     }
                 }
                 .badge(viewModel.unreadConversationCount > 0 ? viewModel.unreadConversationCount : 0)
-                Tab("Profil", systemImage: "person.crop.circle", value: .profile) {
+                Tab("Compte", systemImage: "person.crop.circle", value: .account) {
                     NavigationStack {
-                        ProfileSettingsView(isAgent: false)
+                        AccountView()
                     }
                 }
                 .badge(viewModel.unreadNotificationCount > 0 ? viewModel.unreadNotificationCount : 0)
@@ -838,9 +838,9 @@ private struct AgentRootView: View {
                     }
                 }
                 .badge(viewModel.unreadConversationCount > 0 ? viewModel.unreadConversationCount : 0)
-                Tab("Profil", systemImage: "person.badge.shield.checkmark", value: .profile) {
+                Tab("Compte", systemImage: "person.badge.shield.checkmark", value: .account) {
                     NavigationStack {
-                        ProfileSettingsView(isAgent: true)
+                        AccountView()
                     }
                 }
                 .badge(viewModel.unreadNotificationCount > 0 ? viewModel.unreadNotificationCount : 0)

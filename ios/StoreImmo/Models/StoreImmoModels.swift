@@ -687,7 +687,7 @@ nonisolated enum AppTabSeller: Hashable, Sendable {
     case dashboard
     case mandates
     case messages
-    case profile
+    case account
 }
 
 nonisolated enum AppTabAgent: Hashable, Sendable {
@@ -695,8 +695,96 @@ nonisolated enum AppTabAgent: Hashable, Sendable {
     case discover
     case mandates
     case messages
-    case profile
+    case account
 }
+nonisolated enum SupportCategory: String, CaseIterable, Identifiable, Sendable {
+    case technicalIssue = "Problème technique"
+    case subscription = "Abonnement"
+    case payment = "Paiement"
+    case application = "Candidature"
+    case project = "Projet / bien immobilier"
+    case account = "Compte et connexion"
+    case other = "Autre"
+    
+    var id: String { rawValue }
+    
+    var symbolName: String {
+        switch self {
+        case .technicalIssue: return "exclamationmark.triangle"
+        case .subscription: return "star.circle"
+        case .payment: return "creditcard"
+        case .application: return "doc.text"
+        case .project: return "house"
+        case .account: return "person.circle"
+        case .other: return "questionmark.circle"
+        }
+    }
+}
+
+nonisolated enum SupportTicketStatus: String, CaseIterable, Sendable {
+    case new = "Nouvelle"
+    case inProgress = "En cours"
+    case resolved = "Résolue"
+    
+    var color: String {
+        switch self {
+        case .new: return "blue"
+        case .inProgress: return "orange"
+        case .resolved: return "green"
+        }
+    }
+}
+
+nonisolated struct SupportTicket: Identifiable, Hashable, Sendable {
+    let id: UUID
+    let category: SupportCategory
+    let subject: String
+    let message: String
+    let status: SupportTicketStatus
+    let createdAt: Date
+    let updatedAt: Date?
+    
+    init(
+        id: UUID = UUID(),
+        category: SupportCategory,
+        subject: String,
+        message: String,
+        status: SupportTicketStatus = .new,
+        createdAt: Date = Date(),
+        updatedAt: Date? = nil
+    ) {
+        self.id = id
+        self.category = category
+        self.subject = subject
+        self.message = message
+        self.status = status
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+nonisolated struct FAQItem: Identifiable, Hashable, Sendable {
+    let id: UUID
+    let question: String
+    let answer: String
+    let category: String
+    
+    init(id: UUID = UUID(), question: String, answer: String, category: String) {
+        self.id = id
+        self.question = question
+        self.answer = answer
+        self.category = category
+    }
+}
+
+nonisolated struct NotificationSettings: Sendable {
+    var projectsEnabled: Bool = true
+    var applicationsEnabled: Bool = true
+    var messagesEnabled: Bool = true
+    var subscriptionEnabled: Bool = true
+    var generalEnabled: Bool = true
+}
+
 extension String {
     nonisolated var isValidEmail: Bool {
         let pattern = #"^[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$"#

@@ -30,7 +30,7 @@ struct ContentView: View {
                     AuthenticationFlowView(role: role)
                 }
             } else {
-                RoleSelectionView()
+                PublicRootView()
             }
         }
         .tint(.blue)

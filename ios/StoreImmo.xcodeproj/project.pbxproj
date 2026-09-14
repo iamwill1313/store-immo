@@ -7,6 +7,11 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		17AF58E4305731FD002D0403 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17AF58E3305731FD002D0403 /* Config.swift */; };
+		17AF58E630573211002D0403 /* .gitignore 2 in Resources */ = {isa = PBXBuildFile; fileRef = 17AF58E530573211002D0403 /* .gitignore 2 */; };
+		17AF58E83057321D002D0403 /* Config.example.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17AF58E73057321D002D0403 /* Config.example.swift */; };
+		17AF58EA30573240002D0403 /* CONFIG_README.md in Resources */ = {isa = PBXBuildFile; fileRef = 17AF58E930573240002D0403 /* CONFIG_README.md */; };
+		17AF58EC305733B6002D0403 /* Config.example.md in Resources */ = {isa = PBXBuildFile; fileRef = 17AF58EB305733B6002D0403 /* Config.example.md */; };
 		17EDACB8304B5DFC005A2F53 /* Config.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17EDACB7304B5DFC005A2F53 /* Config.swift */; };
 		XX50D61ED0BAE05FA2F8E9XX /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = XX1C9FF110ABBCE8BF456CXX /* Supabase */; };
 /* End PBXBuildFile section */
@@ -32,6 +37,11 @@
 		105FC57A2E9EAD3100EA8BCF /* StoreImmo.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StoreImmo.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		105FC5892E9EAD3200EA8BCF /* StoreImmoTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StoreImmoTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		105FC5932E9EAD3200EA8BCF /* StoreImmoUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StoreImmoUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		17AF58E3305731FD002D0403 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
+		17AF58E530573211002D0403 /* .gitignore 2 */ = {isa = PBXFileReference; lastKnownFileType = text; path = ".gitignore 2"; sourceTree = "<group>"; };
+		17AF58E73057321D002D0403 /* Config.example.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.example.swift; sourceTree = "<group>"; };
+		17AF58E930573240002D0403 /* CONFIG_README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CONFIG_README.md; sourceTree = "<group>"; };
+		17AF58EB305733B6002D0403 /* Config.example.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = Config.example.md; sourceTree = "<group>"; };
 		17EDACB7304B5DFC005A2F53 /* Config.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Config.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -87,6 +97,11 @@
 				105FC58C2E9EAD3200EA8BCF /* StoreImmoTests */,
 				105FC5962E9EAD3200EA8BCF /* StoreImmoUITests */,
 				105FC57B2E9EAD3100EA8BCF /* Products */,
+				17AF58E3305731FD002D0403 /* Config.swift */,
+				17AF58E530573211002D0403 /* .gitignore 2 */,
+				17AF58E73057321D002D0403 /* Config.example.swift */,
+				17AF58E930573240002D0403 /* CONFIG_README.md */,
+				17AF58EB305733B6002D0403 /* Config.example.md */,
 			);
 			sourceTree = "<group>";
 		};
@@ -224,6 +239,9 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				17AF58EC305733B6002D0403 /* Config.example.md in Resources */,
+				17AF58EA30573240002D0403 /* CONFIG_README.md in Resources */,
+				17AF58E630573211002D0403 /* .gitignore 2 in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -249,6 +267,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				17EDACB8304B5DFC005A2F53 /* Config.swift in Sources */,
+				17AF58E4305731FD002D0403 /* Config.swift in Sources */,
+				17AF58E83057321D002D0403 /* Config.example.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

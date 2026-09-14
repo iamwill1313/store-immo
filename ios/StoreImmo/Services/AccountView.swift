@@ -167,15 +167,14 @@ struct AccountView: View {
             .sheet(isPresented: $showingFAQ) {
                 FAQView()
             }
-            .confirmationDialog(
+            .alert(
                 "Se déconnecter",
-                isPresented: $showingSignOutConfirmation,
-                titleVisibility: .visible
+                isPresented: $showingSignOutConfirmation
             ) {
+                Button("Annuler", role: .cancel) {}
                 Button("Se déconnecter", role: .destructive) {
                     viewModel.signOut()
                 }
-                Button("Annuler", role: .cancel) {}
             } message: {
                 Text("Êtes-vous sûr de vouloir vous déconnecter ?")
             }

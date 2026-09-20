@@ -8,103 +8,262 @@ struct PublicPropertiesTabView: View {
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 24) {
-                    // Header avec compteur
-                    PropertiesHeaderView()
-                        .padding(.horizontal, 20)
-                        .padding(.top, 8)
-                    
-                    // Grid de propriétés avec VRAIES photos
-                    PublicPropertiesGridView()
-                        .padding(.horizontal, 20)
-                    
-                    // CTA vendeur
-                    PublicPropertiesCTASection()
-                        .padding(.horizontal, 20)
+                VStack(spacing: 0) {
+                    // Section "Biens disponibles"
+                    PublicPropertiesContentSection()
+                        .padding(.horizontal, 24)
+                        .padding(.top, 24)
                         .padding(.bottom, 32)
+                    
+                    // Bouton "Publier mon bien"
+                    PublicPropertiesPublishButton()
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 40)
                 }
             }
-            .background(Color(.systemGroupedBackground))
+            .background(Color(.systemBackground))
             .navigationTitle("Biens")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 }
 
-/// Header moderne avec compteur de biens
-private struct PropertiesHeaderView: View {
+// MARK: - Content Section (Biens disponibles)
+
+private struct PublicPropertiesContentSection: View {
     @Environment(AppViewModel.self) private var viewModel
     
     var body: some View {
-        HStack(alignment: .center, spacing: 14) {
-            // Icône
-            Image(systemName: "house.fill")
-                .font(.title)
-                .foregroundStyle(StoreImmoTheme.navy)
-                .frame(width: 50, height: 50)
-                .background(StoreImmoTheme.mist, in: .circle)
-            
-            VStack(alignment: .leading, spacing: 4) {
+        VStack(spacing: 20) {
+            // Titre de section
+            VStack(spacing: 8) {
                 Text("Biens disponibles")
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundStyle(StoreImmoTheme.navy)
+                    .multilineTextAlignment(.center)
+                
+                // Sous-titre
+                Text("Découvrez les derniers biens publiés par nos vendeurs.")
+                    .font(.system(size: 17, weight: .regular))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity)
+            
+            // Liste des biens
+            PublicPropertiesListView()
+                .padding(.top, 8)
+        }
+    }
+}
+
+// MARK: - Properties List View
+
+private struct PublicPropertiesListView: View {
+    @Environment(AppViewModel.self) private var viewModel
+    @State private var selectedProperty: PropertyProject?
+    @State private var visiblePropertiesCount: Int = 4
+    
+    private let initialDisplayCount: Int = 4
+    private let loadMoreIncrement: Int = 4
+    
+    var body: some View {
+        if viewModel.publicProjects.isEmpty {
+            // Empty state élégant
+            VStack(spacing: 16) {
+                Image(systemName: "house.slash")
+                    .font(.system(size: 60))
+                    .foregroundStyle(.secondary.opacity(0.5))
+                
+                Text("Aucun bien disponible")
                     .font(.title3.bold())
                     .foregroundStyle(.primary)
                 
-                if viewModel.sellerProjects.isEmpty {
-                    Text("Aucun bien pour le moment")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("\(viewModel.sellerProjects.count) \(viewModel.sellerProjects.count > 1 ? "biens" : "bien") en ligne")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(StoreImmoTheme.navy)
-                }
-            }
-            
-            Spacer()
-        }
-        .padding(16)
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 18))
-    }
-}
-
-/// Grid moderne des propriétés avec photos réelles
-private struct PublicPropertiesGridView: View {
-    @Environment(AppViewModel.self) private var viewModel
-    @State private var selectedProperty: PropertyProject?
-    
-    var body: some View {
-        if viewModel.sellerProjects.isEmpty {
-            // Empty state élégant
-            ContentUnavailableView {
-                VStack(spacing: 16) {
-                    Image(systemName: "house.slash")
-                        .font(.system(size: 60))
-                        .foregroundStyle(.secondary.opacity(0.5))
-                    Text("Aucun bien disponible")
-                        .font(.title3.bold())
-                }
-            } description: {
                 Text("Les biens immobiliers publiés par les vendeurs apparaîtront ici.")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
+                    .padding(.horizontal, 32)
             }
-            .frame(minHeight: 300)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 60)
         } else {
-            LazyVStack(spacing: 16) {
-                ForEach(viewModel.sellerProjects) { property in
-                    PublicPropertyModernCard(property: property)
-                        .onTapGesture {
-                            selectedProperty = property
+            ScrollViewReader { scrollProxy in
+                LazyVStack(spacing: 16) {
+                    // Afficher uniquement les biens visibles
+                    ForEach(Array(viewModel.publicProjects.prefix(visiblePropertiesCount))) { property in
+                        PublicPropertyModernCard(property: property)
+                            .onTapGesture {
+                                selectedProperty = property
+                            }
+                            .id(property.id)
+                    }
+                    
+                    // Contrôles d'expansion/réduction
+                    PublicPropertiesLoadingControls(
+                        visibleCount: $visiblePropertiesCount,
+                        totalCount: viewModel.publicProjects.count,
+                        increment: loadMoreIncrement,
+                        initialCount: initialDisplayCount,
+                        scrollProxy: scrollProxy,
+                        properties: viewModel.publicProjects
+                    )
+                    .id("controls")
+                    
+                    // Message discret après le dernier bien
+                    if visiblePropertiesCount >= viewModel.publicProjects.count {
+                        VStack(spacing: 6) {
+                            Text("Professionnel de l'immobilier ou vendeur,")
+                                .font(.system(size: 14, weight: .regular))
+                                .foregroundStyle(.secondary.opacity(0.7))
+                            
+                            Text("créez votre compte gratuitement.")
+                                .font(.system(size: 14, weight: .regular))
+                                .foregroundStyle(.secondary.opacity(0.7))
                         }
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity)
+                        .padding(.top, 32)
+                        .padding(.bottom, 16)
+                    }
+                }
+                .sheet(item: $selectedProperty) { property in
+                    PublicPropertyDetailView(property: property)
                 }
             }
-            .sheet(item: $selectedProperty) { property in
-                PublicPropertyDetailView(property: property)
+            .onAppear {
+                print("📱 PublicPropertiesTabView displaying:", viewModel.publicProjects.count, "properties")
+                // Réinitialiser le compteur si nécessaire
+                if visiblePropertiesCount > initialDisplayCount && viewModel.publicProjects.count <= initialDisplayCount {
+                    visiblePropertiesCount = initialDisplayCount
+                }
             }
         }
     }
 }
+
+// MARK: - Loading Controls (Afficher plus / Réduire)
+
+private struct PublicPropertiesLoadingControls: View {
+    @Binding var visibleCount: Int
+    let totalCount: Int
+    let increment: Int
+    let initialCount: Int
+    let scrollProxy: ScrollViewProxy
+    let properties: [PropertyProject]
+    
+    private var canLoadMore: Bool {
+        visibleCount < totalCount
+    }
+    
+    private var canReduce: Bool {
+        visibleCount > initialCount
+    }
+    
+    var body: some View {
+        HStack(spacing: 12) {
+            // Bouton "Afficher plus de biens"
+            if canLoadMore {
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        visibleCount = min(visibleCount + increment, totalCount)
+                    }
+                }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 14, weight: .semibold))
+                        
+                        Text("Afficher plus")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                    .foregroundStyle(StoreImmoTheme.navy)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .background(StoreImmoTheme.mist, in: .rect(cornerRadius: 14))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(StoreImmoTheme.navy.opacity(0.15), lineWidth: 1)
+                    }
+                    .shadow(color: StoreImmoTheme.navy.opacity(0.08), radius: 4, y: 2)
+                }
+                .buttonStyle(.plain)
+            }
+            
+            // Bouton "Réduire"
+            if canReduce {
+                Button(action: {
+                    // Calculer l'index du dernier bien actuellement visible
+                    let lastVisibleIndex = visibleCount - 1
+                    
+                    // Réduire le nombre de biens visibles
+                    let newCount = max(visibleCount - increment, initialCount)
+                    
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        visibleCount = newCount
+                    }
+                    
+                    // Faire défiler vers le dernier bien qui reste visible
+                    // Attendre la fin de l'animation pour que la mise à jour soit effective
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        let targetIndex = min(newCount - 1, properties.count - 1)
+                        if targetIndex >= 0, targetIndex < properties.count {
+                            withAnimation(.easeInOut(duration: 0.4)) {
+                                scrollProxy.scrollTo(properties[targetIndex].id, anchor: .bottom)
+                            }
+                        }
+                    }
+                }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "chevron.up")
+                            .font(.system(size: 14, weight: .semibold))
+                        
+                        Text("Réduire")
+                            .font(.system(size: 16, weight: .semibold))
+                    }
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .background(Color(.systemGray6), in: .rect(cornerRadius: 14))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .strokeBorder(Color.secondary.opacity(0.15), lineWidth: 1)
+                    }
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.top, 8)
+    }
+}
+
+// MARK: - Publish Button Section
+
+private struct PublicPropertiesPublishButton: View {
+    @Environment(AppViewModel.self) private var viewModel
+    
+    var body: some View {
+        Button(action: {
+            viewModel.chooseRole(.seller)
+        }) {
+            HStack(spacing: 10) {
+                Text("Publier mon bien")
+                    .font(.system(size: 20, weight: .semibold))
+                
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 18, weight: .semibold))
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 56)
+            .background(StoreImmoTheme.navy)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .shadow(color: StoreImmoTheme.navy.opacity(0.25), radius: 12, y: 4)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 
 /// Carte moderne de propriété avec VRAIE photo en grand format
 private struct PublicPropertyModernCard: View {
@@ -264,50 +423,6 @@ private struct PublicPropertyModernCard: View {
     }
 }
 
-/// CTA section encouraging users to create their own property listing
-private struct PublicPropertiesCTASection: View {
-    @Environment(AppViewModel.self) private var viewModel
-    
-    var body: some View {
-        VStack(spacing: 18) {
-            HStack(spacing: 12) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 40))
-                    .foregroundStyle(StoreImmoTheme.navy)
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Vous avez un bien à vendre ?")
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                    
-                    Text("Publiez gratuitement et recevez des candidatures d'agents")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                
-                Spacer()
-            }
-            
-            Button {
-                viewModel.chooseRole(.seller)
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: "arrow.right.circle.fill")
-                    Text("Publier mon bien")
-                        .fontWeight(.semibold)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(StoreImmoTheme.navy, in: .rect(cornerRadius: 14))
-                .foregroundStyle(.white)
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(20)
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 20))
-    }
-}
 
 /// Public Property Detail View — VRAIES photos en plein écran
 private struct PublicPropertyDetailView: View {

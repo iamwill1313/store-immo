@@ -33,6 +33,7 @@ final class AppViewModel {
         notifications.filter { !$0.isRead }.count
     }
     var sellerProjects: [PropertyProject]
+    var publicProjects: [PropertyProject]
     var agentOpportunities: [PropertyProject]
     var sellerMandates: [Mandate]
     var agentMandates: [Mandate]
@@ -102,6 +103,7 @@ final class AppViewModel {
     init() {
         if SupabaseService.shared.isConfigured {
             self.sellerProjects = []
+            self.publicProjects = []
             self.discoverFeedSource = []
             self.agentOpportunities = []
             self.sellerMandates = []
@@ -115,6 +117,7 @@ final class AppViewModel {
         } else {
             let sample = DemoDataFactory.make()
             self.sellerProjects = sample.projects
+            self.publicProjects = sample.feedProjects
             self.discoverFeedSource = sample.feedProjects
             self.agentOpportunities = []
             self.sellerMandates = sample.sellerMandates
@@ -245,6 +248,8 @@ final class AppViewModel {
             if !allRows.isEmpty {
                 let projects = buildProjects(from: allRows, applicationRows: [], agentRows: [])
                 self.discoverFeedSource = projects
+                self.publicProjects = projects
+                print("📦 Public projects loaded:", projects.count)
                 let prevID = selectedProject?.id
                 resetAgentFeed()
                 if selectedRole == .agent, let prevID {
@@ -579,6 +584,7 @@ final class AppViewModel {
         stopMessagesRealtime()
         inAppBanner = nil
         sellerProjects = []
+        publicProjects = []
         conversations = []
         notifications = []
         appliedProjectIDs = []
@@ -1633,6 +1639,7 @@ final class AppViewModel {
         }
         agentOpportunities.insert(freshProject, at: 0)
         sellerProjects.insert(freshProject, at: 0)
+        publicProjects.insert(freshProject, at: 0)
         let feedNotif = NotificationItem(
             title: "Nouveau bien dans votre secteur",
             body: "\(freshProject.title) vient d'arriver dans le feed \(agentBaseCity).",

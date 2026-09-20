@@ -1,62 +1,65 @@
 import SwiftUI
 
 /// Public account tab for unauthenticated users.
-/// REFONTE VISUELLE — Design moderne pour la sélection de rôle et authentification
+/// REFONTE VISUELLE — Interface minimaliste cohérente avec les autres onglets publics
 struct PublicAccountTabView: View {
     @Environment(AppViewModel.self) private var viewModel
+    @State private var showingHelpCenter = false
+    @State private var showingAbout = false
     
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 28) {
-                    // Hero section avec branding Store Immo
-                    PublicAccountHeroSection()
-                        .padding(.top, 8)
+                VStack(spacing: 0) {
+                    // En-tête minimaliste
+                    PublicAccountHeaderSection()
+                        .padding(.top, 20)
+                        .padding(.bottom, 32)
                     
-                    // Role selection moderne
+                    // Sélection de rôle simple
                     PublicRoleSelectionSection()
                         .padding(.horizontal, 20)
+                        .padding(.bottom, 48)
                     
-                    // Trust badges
-                    PublicTrustBadgesSection()
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 32)
+                    // Section d'aide
+                    PublicHelpSection(
+                        showingHelpCenter: $showingHelpCenter,
+                        showingAbout: $showingAbout
+                    )
+                    .padding(.horizontal, 20)
+                    .padding(.bottom, 60)
                 }
             }
-            .background(Color(.systemGroupedBackground))
+            .background(Color(.systemBackground))
             .navigationTitle("Compte")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarTitleDisplayMode(.inline)
+            .sheet(isPresented: $showingHelpCenter) {
+                PublicHelpCenterView()
+            }
+            .sheet(isPresented: $showingAbout) {
+                PublicAboutView()
+            }
         }
     }
 }
 
-// MARK: - Hero Section
+// MARK: - Header Section
 
-private struct PublicAccountHeroSection: View {
+private struct PublicAccountHeaderSection: View {
     var body: some View {
-        VStack(spacing: 18) {
-            // Store Immo branding
-            HStack(spacing: 10) {
-                Image(systemName: "building.2.fill")
-                    .font(.system(size: 36, weight: .semibold))
-                    .foregroundStyle(.white)
-                
-                Text("Store Immo")
-                    .font(.system(size: 38, weight: .bold))
-                    .foregroundStyle(.white)
-            }
+        VStack(spacing: 12) {
+            // Titre principal
+            Text("Choisissez votre espace")
+                .font(.system(size: 26, weight: .bold))
+                .foregroundStyle(StoreImmoTheme.navy)
             
-            // Baseline
-            Text("Vendez votre bien ou développez votre activité immobilière")
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.white.opacity(0.9))
+            // Sous-titre discret
+            Text("Accédez à votre espace ou créez votre compte.")
+                .font(.system(size: 16))
+                .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 28)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 36)
-        .background(StoreImmoTheme.heroGradient)
     }
 }
 
@@ -66,371 +69,291 @@ private struct PublicRoleSelectionSection: View {
     @Environment(AppViewModel.self) private var viewModel
     
     var body: some View {
-        VStack(spacing: 20) {
-            // Section title
-            VStack(spacing: 8) {
-                Text("Choisissez votre espace")
-                    .font(.title2.bold())
-                    .foregroundStyle(.primary)
-                
-                Text("Une expérience pensée pour publier vite côté vendeur et convertir mieux côté agent")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            .padding(.bottom, 8)
+        VStack(spacing: 16) {
+            // Carte Vendeur
+            PublicRoleMinimalCard(
+                role: .seller,
+                action: {
+                    withAnimation(.smooth(duration: 0.35)) {
+                        viewModel.chooseRole(.seller)
+                    }
+                }
+            )
             
-            // Role cards
-            VStack(spacing: 14) {
-                // Seller card
-                PublicRoleModernCard(
-                    role: .seller,
-                    action: {
-                        withAnimation(.smooth(duration: 0.35)) {
-                            viewModel.chooseRole(.seller)
-                        }
+            // Carte Agent
+            PublicRoleMinimalCard(
+                role: .agent,
+                action: {
+                    withAnimation(.smooth(duration: 0.35)) {
+                        viewModel.chooseRole(.agent)
                     }
-                )
-                
-                // Agent card
-                PublicRoleModernCard(
-                    role: .agent,
-                    action: {
-                        withAnimation(.smooth(duration: 0.35)) {
-                            viewModel.chooseRole(.agent)
-                        }
-                    }
-                )
-            }
+                }
+            )
         }
     }
 }
 
-// MARK: - Modern Role Card
+// MARK: - Minimal Role Card
 
-private struct PublicRoleModernCard: View {
+private struct PublicRoleMinimalCard: View {
     let role: UserRole
     let action: () -> Void
     
-    private var eyebrow: String {
+    private var description: String {
         switch role {
         case .seller:
-            "Parcours express"
+            "Publiez votre bien et développez votre projet."
         case .agent:
-            "Espace professionnel"
-        }
-    }
-    
-    private var punchline: String {
-        switch role {
-        case .seller:
-            "Publiez vite, comparez les profils et gardez la main du premier contact jusqu'au mandat."
-        case .agent:
-            "Recevez les biens de votre secteur, candidatez une fois et pilotez chaque mandat au même endroit."
-        }
-    }
-    
-    private var featurePills: [String] {
-        switch role {
-        case .seller:
-            ["Simple", "Rapide"]
-        case .agent:
-            ["Local", "Premium"]
-        }
-    }
-    
-    private var backgroundColor: LinearGradient {
-        switch role {
-        case .seller:
-            LinearGradient(
-                colors: [
-                    Color.white,
-                    Color(red: 235 / 255, green: 244 / 255, blue: 252 / 255),
-                    Color(red: 217 / 255, green: 232 / 255, blue: 247 / 255)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        case .agent:
-            StoreImmoTheme.heroGradient
+            "Développez votre activité immobilière."
         }
     }
     
     var body: some View {
         Button(action: action) {
-            HStack(alignment: .top, spacing: 16) {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text(eyebrow)
-                        .font(.caption.weight(.bold))
-                        .textCase(.uppercase)
-                        .foregroundStyle(role == .seller ? StoreImmoTheme.navy.opacity(0.7) : .white.opacity(0.75))
+            HStack(spacing: 16) {
+                // Contenu textuel
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(role.title.uppercased())
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(StoreImmoTheme.navy)
                     
-                    Text(role.title)
-                        .font(.title.bold())
-                        .foregroundStyle(role == .seller ? StoreImmoTheme.navy : .white)
-                    
-                    Text(role.subtitle)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(role == .seller ? .primary : .white)
+                    Text(description)
+                        .font(.system(size: 15))
+                        .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
-                    
-                    Text(punchline)
-                        .font(.footnote)
-                        .foregroundStyle(role == .seller ? .secondary : .white.opacity(0.85))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 2)
-                    
-                    HStack(spacing: 8) {
-                        ForEach(featurePills, id: \.self) { pill in
-                            Text(pill)
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(role == .seller ? StoreImmoTheme.navy : .white)
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(
-                                    role == .seller ? Color.white.opacity(0.7) : .white.opacity(0.14),
-                                    in: .capsule
-                                )
-                        }
-                    }
-                    .padding(.top, 4)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 
-                VStack(spacing: 10) {
-                    Image(systemName: role.symbolName)
-                        .font(.system(size: 42))
-                        .foregroundStyle(role == .seller ? StoreImmoTheme.navy : .white)
-                        .frame(width: 76, height: 76)
-                        .background(
-                            role == .seller ? Color.white.opacity(0.7) : .white.opacity(0.14),
-                            in: .circle
-                        )
-                    
-                    Image(systemName: "arrow.right.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(role == .seller ? StoreImmoTheme.navy : .white)
-                }
+                // Chevron
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(StoreImmoTheme.navy.opacity(0.5))
             }
-            .padding(22)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(backgroundColor)
-            .clipShape(.rect(cornerRadius: 24))
+            .padding(.vertical, 20)
+            .padding(.horizontal, 20)
+            .background(Color(.systemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
-                    .strokeBorder(
-                        role == .seller ? .white.opacity(0.8) : .white.opacity(0.12),
-                        lineWidth: 1
-                    )
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
             }
-            .shadow(color: .black.opacity(0.08), radius: 14, y: 6)
+            .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
         }
         .buttonStyle(.plain)
     }
 }
 
-// MARK: - Trust Badges Section
+// MARK: - Help Section
 
-private struct PublicTrustBadgesSection: View {
+private struct PublicHelpSection: View {
+    @Binding var showingHelpCenter: Bool
+    @Binding var showingAbout: Bool
+    
     var body: some View {
-        VStack(spacing: 16) {
-            Text("Pourquoi choisir Store Immo ?")
-                .font(.headline.bold())
-                .foregroundStyle(.primary)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(spacing: 0) {
+            // Titre de section
+            HStack {
+                Text("Besoin d'aide ?")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(StoreImmoTheme.navy)
+                Spacer()
+            }
+            .padding(.bottom, 16)
             
-            VStack(spacing: 10) {
-                PublicTrustBadge(
-                    icon: "checkmark.seal.fill",
-                    title: "Profils vérifiés",
-                    description: "Tous nos agents sont vérifiés",
-                    color: StoreImmoTheme.navy
+            // Liste des options d'aide
+            VStack(spacing: 0) {
+                PublicHelpItemButton(
+                    title: "Centre d'aide",
+                    action: { showingHelpCenter = true }
                 )
                 
-                PublicTrustBadge(
-                    icon: "bubble.left.and.bubble.right.fill",
-                    title: "Chat privé sécurisé",
-                    description: "Échangez en toute confidentialité",
-                    color: .blue
-                )
+                Divider()
+                    .padding(.leading, 16)
                 
-                PublicTrustBadge(
-                    icon: "map.fill",
-                    title: "France entière",
-                    description: "Des biens et agents partout",
-                    color: .green
+                PublicHelpItemButton(
+                    title: "À propos de Store Immo",
+                    action: { showingAbout = true }
                 )
             }
+            .background(Color(.systemBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.04), radius: 6, y: 2)
         }
-        .padding(18)
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 20))
     }
 }
 
-private struct PublicTrustBadge: View {
-    let icon: String
+// MARK: - Help Item Button
+
+private struct PublicHelpItemButton: View {
     let title: String
-    let description: String
-    let color: Color
+    let action: () -> Void
     
     var body: some View {
-        HStack(spacing: 14) {
-            Image(systemName: icon)
-                .font(.title2)
-                .foregroundStyle(color)
-                .frame(width: 48, height: 48)
-                .background(color.opacity(0.12), in: .circle)
-            
-            VStack(alignment: .leading, spacing: 3) {
+        Button(action: action) {
+            HStack(spacing: 12) {
                 Text(title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.system(size: 16))
                     .foregroundStyle(.primary)
                 
-                Text(description)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(StoreImmoTheme.navy.opacity(0.4))
             }
-            
-            Spacer()
+            .padding(.horizontal, 16)
+            .padding(.vertical, 16)
+            .contentShape(Rectangle())
         }
-        .padding(12)
-        .background(Color(.tertiarySystemBackground), in: .rect(cornerRadius: 14))
-    }
-}
-
-#Preview {
-    PublicAccountTabView()
-        .environment(AppViewModel())
-}
         .buttonStyle(.plain)
     }
 }
 
-// MARK: - Authentication Section
+// MARK: - Public Help Center View
 
-private struct PublicAuthenticationSection: View {
-    @State private var showLoginSheet = false
-    @State private var showSignupSheet = false
-    
-    var body: some View {
-        VStack(spacing: 12) {
-            // Login button
-            Button {
-                showLoginSheet = true
-            } label: {
-                Text("Se connecter")
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.blue)
-                    )
-            }
-            .buttonStyle(.plain)
-            
-            // Signup button
-            Button {
-                showSignupSheet = true
-            } label: {
-                Text("Créer un compte")
-                    .font(.headline)
-                    .foregroundStyle(.blue)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.blue, lineWidth: 2)
-                    )
-            }
-            .buttonStyle(.plain)
-        }
-        .sheet(isPresented: $showLoginSheet) {
-            PublicAuthenticationInfoSheet(mode: .login)
-        }
-        .sheet(isPresented: $showSignupSheet) {
-            PublicAuthenticationInfoSheet(mode: .signup)
-        }
-    }
-}
-
-// MARK: - Authentication Info Sheet
-
-private struct PublicAuthenticationInfoSheet: View {
+struct PublicHelpCenterView: View {
     @Environment(\.dismiss) private var dismiss
-    @Environment(AppViewModel.self) private var viewModel
-    
-    enum Mode {
-        case login
-        case signup
-        
-        var title: String {
-            switch self {
-            case .login: return "Se connecter"
-            case .signup: return "Créer un compte"
-            }
-        }
-        
-        var message: String {
-            switch self {
-            case .login:
-                return "Pour vous connecter, veuillez d'abord choisir votre espace (Vendeur ou Agent) ci-dessus."
-            case .signup:
-                return "Pour créer un compte, veuillez d'abord choisir votre espace (Vendeur ou Agent) ci-dessus."
-            }
-        }
-    }
-    
-    let mode: Mode
+    @State private var showingReportProblem = false
+    @State private var showingFAQ = false
     
     var body: some View {
         NavigationStack {
-            VStack(spacing: 24) {
-                Spacer()
-                
-                // Icon
-                Image(systemName: "info.circle.fill")
-                    .font(.system(size: 60))
-                    .foregroundStyle(.blue)
-                
-                // Title
-                Text(mode.title)
-                    .font(.title2)
-                    .fontWeight(.bold)
-                
-                // Message
-                Text(mode.message)
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal)
-                
-                Spacer()
-                
-                // Close button
-                Button {
-                    dismiss()
-                } label: {
-                    Text("Compris")
-                        .font(.headline)
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color.blue)
-                        )
+            List {
+                Section {
+                    Button {
+                        showingReportProblem = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "exclamationmark.bubble.fill")
+                                .font(.title3)
+                                .foregroundStyle(.blue)
+                                .frame(width: 28)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Signaler un problème")
+                                    .font(.body)
+                                    .foregroundStyle(.primary)
+                                
+                                Text("Contactez notre équipe de support")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    
+                    Button {
+                        showingFAQ = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "questionmark.circle.fill")
+                                .font(.title3)
+                                .foregroundStyle(.blue)
+                                .frame(width: 28)
+                            
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("Questions fréquentes")
+                                    .font(.body)
+                                    .foregroundStyle(.primary)
+                                
+                                Text("Trouvez rapidement une réponse")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            
+                            Spacer()
+                            
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                } header: {
+                    Text("Comment pouvons-nous vous aider ?")
                 }
-                .buttonStyle(.plain)
-                .padding(.horizontal)
+                
+                Section {
+                    HStack {
+                        Image(systemName: "envelope.fill")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 28)
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Email")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            
+                            Text("support@storeimmo.fr")
+                                .font(.body)
+                                .foregroundStyle(.primary)
+                        }
+                    }
+                    .padding(.vertical, 4)
+                } header: {
+                    Text("Nous contacter")
+                }
             }
-            .padding()
-            .navigationTitle(mode.title)
+            .navigationTitle("Centre d'aide")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Fermer") {
+                        dismiss()
+                    }
+                }
+            }
+            .sheet(isPresented: $showingReportProblem) {
+                ReportProblemView()
+            }
+            .sheet(isPresented: $showingFAQ) {
+                PublicFAQView()
+            }
+        }
+    }
+}
+
+// MARK: - Public FAQ View
+
+struct PublicFAQView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var expandedItemID: UUID?
+    @State private var searchText = ""
+    
+    var body: some View {
+        NavigationStack {
+            List {
+                ForEach(filteredFAQItems) { item in
+                    FAQItemView(
+                        item: item,
+                        isExpanded: expandedItemID == item.id
+                    ) {
+                        withAnimation {
+                            if expandedItemID == item.id {
+                                expandedItemID = nil
+                            } else {
+                                expandedItemID = item.id
+                            }
+                        }
+                    }
+                }
+            }
+            .searchable(text: $searchText, prompt: "Rechercher...")
+            .navigationTitle("Questions fréquentes")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
                     Button("Fermer") {
                         dismiss()
                     }
@@ -438,71 +361,128 @@ private struct PublicAuthenticationInfoSheet: View {
             }
         }
     }
-}
-
-// MARK: - Trust Badges Section
-
-private struct PublicTrustBadgesSection: View {
-    var body: some View {
-        VStack(spacing: 16) {
-            Text("Pourquoi choisir Store Immo ?")
-                .font(.headline)
-                .foregroundStyle(.primary)
-            
-            VStack(spacing: 12) {
-                PublicTrustBadge(
-                    icon: "checkmark.shield.fill",
-                    title: "Sécurisé",
-                    color: .green
-                )
-                
-                PublicTrustBadge(
-                    icon: "person.2.fill",
-                    title: "Professionnels vérifiés",
-                    color: .blue
-                )
-                
-                PublicTrustBadge(
-                    icon: "bolt.fill",
-                    title: "Simple et rapide",
-                    color: .orange
-                )
-            }
+    
+    private var filteredFAQItems: [FAQItem] {
+        if searchText.isEmpty {
+            return publicFAQItems
         }
-        .padding(.vertical, 24)
-        .padding(.bottom)
+        return publicFAQItems.filter {
+            $0.question.localizedCaseInsensitiveContains(searchText) ||
+            $0.answer.localizedCaseInsensitiveContains(searchText)
+        }
     }
+    
+    private let publicFAQItems: [FAQItem] = [
+        FAQItem(
+            question: "Qu'est-ce que Store Immo ?",
+            answer: "Store Immo est une plateforme qui met en relation les vendeurs de biens immobiliers avec des agents immobiliers vérifiés. Notre mission est de simplifier le processus de vente immobilière en permettant aux vendeurs de comparer facilement les profils et propositions des agents de leur secteur.",
+            category: "Général"
+        ),
+        FAQItem(
+            question: "Comment fonctionne Store Immo ?",
+            answer: "Les vendeurs publient leur projet immobilier sur la plateforme. Les agents de leur secteur reçoivent une notification et peuvent postuler. Le vendeur compare les profils, échange avec les agents via messagerie, puis choisit celui qui lui convient le mieux.",
+            category: "Général"
+        ),
+        FAQItem(
+            question: "Store Immo est-il gratuit ?",
+            answer: "Store Immo est entièrement gratuit pour les vendeurs. Les agents accèdent à la plateforme via un abonnement mensuel qui leur permet de candidater sur les projets de leur secteur.",
+            category: "Tarifs"
+        ),
+        FAQItem(
+            question: "Comment sont vérifiés les agents ?",
+            answer: "Tous les agents présents sur Store Immo doivent fournir leur carte professionnelle ou leur numéro de mandataire. Nous vérifions l'authenticité de ces informations avant de valider leur compte.",
+            category: "Sécurité"
+        ),
+        FAQItem(
+            question: "Puis-je utiliser Store Immo partout en France ?",
+            answer: "Oui, Store Immo est disponible dans toute la France. Notre réseau d'agents couvre l'ensemble du territoire, des grandes villes aux zones rurales.",
+            category: "Général"
+        ),
+        FAQItem(
+            question: "Comment créer mon compte ?",
+            answer: "Choisissez votre profil (Vendeur ou Agent) depuis l'onglet Compte, puis suivez les étapes d'inscription. Vous recevrez un email de confirmation pour activer votre compte.",
+            category: "Compte"
+        ),
+        FAQItem(
+            question: "Mes données sont-elles sécurisées ?",
+            answer: "Oui, nous prenons la sécurité de vos données très au sérieux. Toutes les informations sont cryptées et stockées de manière sécurisée. Nous ne partageons jamais vos données personnelles avec des tiers sans votre consentement.",
+            category: "Sécurité"
+        ),
+        FAQItem(
+            question: "Comment contacter le support ?",
+            answer: "Vous pouvez nous contacter par email à support@storeimmo.fr ou utiliser le formulaire 'Signaler un problème' disponible dans le Centre d'aide. Notre équipe vous répondra sous 48h maximum.",
+            category: "Support"
+        )
+    ]
 }
 
-private struct PublicTrustBadge: View {
-    let icon: String
-    let title: String
-    let color: Color
+// MARK: - Public About View
+
+struct PublicAboutView: View {
+    @Environment(\.dismiss) private var dismiss
+    
+    private var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0"
+    }
+    
+    private var buildNumber: String {
+        Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "1"
+    }
     
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 20))
-                .foregroundStyle(color)
-                .frame(width: 40, height: 40)
-                .background(
-                    Circle()
-                        .fill(color.opacity(0.1))
-                )
-            
-            Text(title)
-                .font(.subheadline)
-                .fontWeight(.medium)
-                .foregroundStyle(.primary)
-            
-            Spacer()
+        NavigationStack {
+            List {
+                Section {
+                    VStack(spacing: 16) {
+                        Image(systemName: "building.2.fill")
+                            .font(.system(size: 64))
+                            .foregroundStyle(.blue)
+                        
+                        Text("Store Immo")
+                            .font(.title.bold())
+                        
+                        Text("Votre partenaire immobilier")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+                }
+                .listRowBackground(Color.clear)
+                
+                Section {
+                    HStack {
+                        Text("Version")
+                            .foregroundStyle(.primary)
+                        Spacer()
+                        Text("\(appVersion) (\(buildNumber))")
+                            .foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("Informations")
+                }
+                
+                Section {
+                    HStack {
+                        Spacer()
+                        Text("© 2024 Store Immo")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                    }
+                }
+                .listRowBackground(Color.clear)
+            }
+            .navigationTitle("À propos")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Fermer") {
+                        dismiss()
+                    }
+                }
+            }
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(.systemBackground))
-                .shadow(color: .black.opacity(0.05), radius: 4, y: 2)
-        )
     }
 }
 

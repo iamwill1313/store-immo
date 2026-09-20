@@ -1,305 +1,403 @@
 import SwiftUI
 
-/// Public tab displaying available real estate professionals with REAL photos.
-/// REFONTE VISUELLE — Affichage moderne des agents avec VRAIES photos de profil
+/// Public tab displaying featured real estate professionals.
+/// REFONTE VISUELLE — Affichage cohérent avec Biens et Actualités
 struct PublicProfessionalsTabView: View {
     @Environment(AppViewModel.self) private var viewModel
     
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(spacing: 24) {
-                    // Header moderne
-                    ProfessionalsHeaderView()
-                        .padding(.horizontal, 20)
-                        .padding(.top, 8)
+                VStack(spacing: 0) {
+                    // En-tête minimaliste Store Immo
+                    ProfessionalsHeaderSection()
+                        .padding(.top, 20)
+                        .padding(.bottom, 28)
                     
-                    // Grid des agents avec VRAIES photos
-                    PublicAgentsModernGridView()
+                    // Section "Agents mis en avant"
+                    ProfessionalsFeaturedAgentsSection()
+                        .padding(.horizontal, 20)
+                        .padding(.bottom, 28)
+                    
+                    // Encadré "Rejoindre Store Immo"
+                    ProfessionalsJoinSection()
                         .padding(.horizontal, 20)
                         .padding(.bottom, 32)
                 }
             }
-            .background(Color(.systemGroupedBackground))
+            .background(Color(.systemBackground))
             .navigationTitle("Professionnels")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 }
 
-/// Header moderne avec icône et description
-private struct ProfessionalsHeaderView: View {
+// MARK: - Header Section (En-tête minimaliste)
+
+private struct ProfessionalsHeaderSection: View {
     var body: some View {
-        HStack(alignment: .center, spacing: 14) {
-            // Icône professionnels
-            Image(systemName: "person.2.fill")
-                .font(.title)
-                .foregroundStyle(.white)
-                .frame(width: 50, height: 50)
-                .background(
-                    LinearGradient(
-                        colors: [Color.purple, Color.purple.opacity(0.8)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    in: .circle
-                )
+        VStack(spacing: 12) {
+            // Titre principal : Agents immobiliers vérifiés
+            Text("Agents immobiliers vérifiés")
+                .font(.system(size: 26, weight: .bold))
+                .foregroundStyle(StoreImmoTheme.navy)
             
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Agents immobiliers vérifiés")
-                    .font(.title3.bold())
-                    .foregroundStyle(.primary)
-                
-                Text("Trouvez le professionnel idéal")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            
-            Spacer()
+            // Sous-titre
+            Text("Découvrez les professionnels mis en avant par Store Immo.")
+                .font(.system(size: 16))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 32)
         }
-        .padding(16)
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 18))
+        .frame(maxWidth: .infinity)
     }
 }
 
-/// Grid moderne des agents avec photos réelles
-private struct PublicAgentsModernGridView: View {
+// MARK: - Featured Agents Section
+
+private struct ProfessionalsFeaturedAgentsSection: View {
+    @Environment(AppViewModel.self) private var viewModel
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            // Liste des agents mis en avant
+            ProfessionalsFeaturedAgentsList()
+        }
+    }
+}
+
+// MARK: - Featured Agents List
+
+private struct ProfessionalsFeaturedAgentsList: View {
     @Environment(AppViewModel.self) private var viewModel
     @State private var selectedAgent: AgentProfile?
-    @State private var publicAgents: [AgentProfile] = []
-    
-    private let columns = [
-        GridItem(.flexible(), spacing: 14),
-        GridItem(.flexible(), spacing: 14)
-    ]
+    @State private var featuredAgents: [AgentProfile] = []
     
     var body: some View {
         Group {
-            if publicAgents.isEmpty {
-                // Empty state élégant
-                ContentUnavailableView {
-                    VStack(spacing: 16) {
-                        Image(systemName: "person.2.slash")
-                            .font(.system(size: 60))
-                            .foregroundStyle(.secondary.opacity(0.5))
-                        Text("Aucun agent disponible")
-                            .font(.title3.bold())
-                    }
-                } description: {
-                    Text("Les profils des agents immobiliers apparaîtront ici.")
+            if featuredAgents.isEmpty {
+                // Empty state discret
+                VStack(spacing: 16) {
+                    Image(systemName: "person.2.slash")
+                        .font(.system(size: 50))
+                        .foregroundStyle(.secondary.opacity(0.4))
+                    
+                    Text("Aucun agent mis en avant")
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                    
+                    Text("La sélection d'agents sera bientôt disponible.")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
+                        .padding(.horizontal, 32)
                 }
-                .frame(minHeight: 300)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 50)
             } else {
-                LazyVGrid(columns: columns, spacing: 16) {
-                    ForEach(publicAgents) { agent in
-                        PublicAgentModernCard(agent: agent)
-                            .onTapGesture {
-                                selectedAgent = agent
-                            }
+                VStack(spacing: 0) {
+                    ForEach(featuredAgents) { agent in
+                        Button {
+                            selectedAgent = agent
+                        } label: {
+                            ProfessionalsFeaturedAgentCard(agent: agent)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
+                .background(Color(.systemBackground))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+                }
+                .shadow(color: .black.opacity(0.04), radius: 8, y: 2)
                 .sheet(item: $selectedAgent) { agent in
-                    PublicAgentDetailModernView(agent: agent)
+                    ProfessionalsAgentDetailView(agent: agent)
                 }
             }
         }
         .task {
-            await loadPublicAgents()
+            await loadFeaturedAgents()
         }
     }
     
-    private func loadPublicAgents() async {
-        // Extract agents from existing data
-        let agentsFromOpportunities = viewModel.agentOpportunities.flatMap { project in
-            project.applications.map { $0.agent }
+    /// Charge les 5 agents mis en avant par Store Immo.
+    /// Pour V1: sélection basée sur l'activité et les données disponibles.
+    /// À terme: remplacer par un système de sélection manuelle/hebdomadaire.
+    private func loadFeaturedAgents() async {
+        // Récupérer TOUS les profils agents depuis Supabase (pas seulement ceux ayant candidaté)
+        let agentRows = await SupabaseService.shared.fetch(from: "agents_profiles", as: AgentProfileRow.self)
+        
+        print("📌 [Featured Agents] Profils agents récupérés depuis Supabase:", agentRows.count)
+        
+        // Convertir les rows en AgentProfile
+        var allAgents: [AgentProfile] = agentRows.map { row in
+            AgentProfile(
+                id: UUID(uuidString: row.user_id) ?? UUID(),
+                fullName: "\(row.first_name) \(row.last_name)".trimmingCharacters(in: .whitespaces),
+                agencyName: row.agency ?? "Indépendant",
+                city: row.city,
+                badge: .professionalCard(number: "Vérifié"),
+                bio: row.description ?? "Agent immobilier vérifié sur Store Immo.",
+                averageRating: 0,
+                reviewCount: 0,
+                salesLast12Months: 0,
+                soldRate: 0,
+                averageSalePrice: 0,
+                averageDelayDays: 0,
+                commissionPercent: 4.5,
+                interventionZones: [],
+                reviews: [],
+                photoSymbol: "person.crop.circle.fill",
+                plan: .starter,
+                profilePhotoURL: row.profile_photo_url
+            )
         }
         
-        let uniqueAgents = Dictionary(grouping: agentsFromOpportunities, by: { $0.id })
-            .compactMap { $0.value.first }
-        
+        // Ajouter currentAgentProfile s'il existe et n'est pas déjà présent
         if let currentAgent = viewModel.currentAgentProfile {
-            var agents = uniqueAgents
-            if !agents.contains(where: { $0.id == currentAgent.id }) {
-                agents.append(currentAgent)
+            if !allAgents.contains(where: { $0.id == currentAgent.id }) {
+                allAgents.append(currentAgent)
+                print("📌 [Featured Agents] Ajout currentAgentProfile:", currentAgent.fullName)
             }
-            publicAgents = Array(agents.prefix(20))
-        } else {
-            publicAgents = Array(uniqueAgents.prefix(20))
+        }
+        
+        // Pour V1: afficher simplement les 5 premiers agents disponibles
+        // (La logique de sélection hebdomadaire sera implémentée plus tard)
+        let selectedAgents = allAgents
+            .sorted { agent1, agent2 in
+                // Critère 1: Plan (Elite > Pro > Starter)
+                let plan1Weight = planWeight(agent1.plan)
+                let plan2Weight = planWeight(agent2.plan)
+                
+                if plan1Weight != plan2Weight {
+                    return plan1Weight > plan2Weight
+                }
+                
+                // Critère 2: Date d'inscription (plus récent)
+                if let date1 = agent1.memberSinceDate, let date2 = agent2.memberSinceDate {
+                    return date1 > date2
+                }
+                
+                return false
+            }
+            .prefix(5) // LIMITE STRICTE : 5 agents maximum
+        
+        featuredAgents = Array(selectedAgents)
+        
+        print("📌 [Featured Agents] Sélection finale affichée:", featuredAgents.count, "agents")
+        featuredAgents.forEach { agent in
+            print("   - \(agent.fullName) (\(agent.agencyName)) - Plan \(agent.plan.title)")
+        }
+    }
+    
+    private func planWeight(_ plan: SubscriptionPlan) -> Int {
+        switch plan {
+        case .elite: return 3
+        case .pro: return 2
+        case .starter: return 1
         }
     }
 }
 
-/// Carte moderne agent avec VRAIE photo de profil
-private struct PublicAgentModernCard: View {
+// MARK: - Featured Agent Card
+
+/// Liste professionnelle d'agents - design épuré et compact
+private struct ProfessionalsFeaturedAgentCard: View {
     let agent: AgentProfile
     
     var body: some View {
-        VStack(spacing: 14) {
-            // Photo de profil en grand format
-            ZStack(alignment: .bottomTrailing) {
-                if let photoURL = agent.profilePhotoURL, let url = URL(string: photoURL) {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case .success(let image):
-                            image
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 120, height: 120)
-                                .clipShape(Circle())
-                        case .failure:
-                            agentPlaceholder
-                        default:
-                            Color(.systemGray5)
-                                .frame(width: 120, height: 120)
-                                .clipShape(Circle())
-                                .overlay {
-                                    ProgressView()
-                                }
-                        }
-                    }
-                } else {
-                    agentPlaceholder
+        HStack(spacing: 14) {
+            // Photo ronde à gauche
+            agentPhotoView
+                .frame(width: 64, height: 64)
+                .clipShape(Circle())
+                .overlay {
+                    Circle()
+                        .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
                 }
-                
-                // Badge plan
-                planBadge
-                    .offset(x: -8, y: -8)
-            }
             
-            // Informations agent
-            VStack(spacing: 6) {
+            // Informations à droite
+            VStack(alignment: .leading, spacing: 4) {
+                // Nom
                 Text(agent.fullName)
-                    .font(.headline)
-                    .lineLimit(1)
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(.primary)
+                    .lineLimit(1)
                 
+                // Agence
                 if !agent.agencyName.isEmpty {
                     Text(agent.agencyName)
-                        .font(.caption.weight(.medium))
+                        .font(.system(size: 15))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
-                } else {
-                    Text("Indépendant")
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(.secondary)
                 }
                 
-                // Ville principale
+                // Ville
                 HStack(spacing: 4) {
                     Image(systemName: "mappin.circle.fill")
-                        .font(.caption2)
-                    Text(agent.interventionZones.first?.city ?? "France")
-                        .font(.caption)
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                    Text(agent.city)
+                        .font(.system(size: 14))
+                        .foregroundStyle(.secondary)
                 }
-                .foregroundStyle(Color.purple)
-                .padding(.top, 2)
+                .padding(.bottom, 2)
                 
-                // Badge vérification
-                if !agent.badge.title.isEmpty {
-                    Text(agent.badge.title)
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(
-                            LinearGradient(
-                                colors: [Color.purple, Color.purple.opacity(0.8)],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            ),
-                            in: .capsule
-                        )
-                        .padding(.top, 4)
+                // Note et avis si disponibles
+                if agent.reviewCount > 0 && agent.averageRating > 0 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "star.fill")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.orange)
+                        Text(String(format: "%.1f", agent.averageRating))
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.primary)
+                        Text("·")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                        Text("\(agent.reviewCount) avis")
+                            .font(.system(size: 13))
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
+            
+            Spacer(minLength: 0)
+            
+            // Chevron discret
+            Image(systemName: "chevron.right")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(StoreImmoTheme.navy.opacity(0.4))
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
-        .padding(.horizontal, 12)
-        .background(Color(.secondarySystemBackground), in: .rect(cornerRadius: 18))
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+        .padding(.vertical, 12)
+        .padding(.horizontal, 16)
+        .background(Color(.systemBackground))
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(Color.primary.opacity(0.08))
+                .frame(height: 0.5)
+                .padding(.leading, 94)
         }
-        .shadow(color: .black.opacity(0.06), radius: 10, y: 4)
-    }
-    
-    private var agentPlaceholder: some View {
-        Circle()
-            .fill(
-                LinearGradient(
-                    colors: [Color.purple, Color.purple.opacity(0.75)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .frame(width: 120, height: 120)
-            .overlay {
-                Image(systemName: agent.photoSymbol)
-                    .font(.system(size: 50))
-                    .foregroundStyle(.white.opacity(0.9))
-            }
     }
     
     @ViewBuilder
-    private var planBadge: some View {
-        let planColor: Color = {
-            switch agent.plan {
-            case .starter: return .teal
-            case .pro: return .blue
-            case .elite: return .orange
+    private var agentPhotoView: some View {
+        if let photoURL = agent.profilePhotoURL, let url = URL(string: photoURL) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                case .failure:
+                    agentPhotoPlaceholder
+                default:
+                    Color(.systemGray5)
+                        .overlay {
+                            ProgressView()
+                        }
+                }
             }
-        }()
-        
-        Image(systemName: agent.plan.iconName)
-            .font(.caption2.weight(.bold))
-            .foregroundStyle(.white)
-            .frame(width: 28, height: 28)
-            .background(planColor, in: .circle)
-            .overlay {
-                Circle()
-                    .strokeBorder(.white, lineWidth: 2)
-            }
+        } else {
+            agentPhotoPlaceholder
+        }
+    }
+    
+    @ViewBuilder
+    private var agentPhotoPlaceholder: some View {
+        ZStack {
+            Color(.systemGray5)
+            Image(systemName: "person.crop.circle.fill")
+                .font(.system(size: 32))
+                .foregroundStyle(.secondary.opacity(0.5))
+        }
     }
 }
 
-/// Vue détail agent en modal — design moderne
-private struct PublicAgentDetailModernView: View {
+// MARK: - Join Section
+
+private struct ProfessionalsJoinSection: View {
+    @Environment(AppViewModel.self) private var viewModel
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            // Message pour les agents
+            VStack(spacing: 4) {
+                Text("Vous êtes agent immobilier ?")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(.primary)
+                    .multilineTextAlignment(.center)
+                
+                Text("Développez votre activité sur Store Immo.")
+                    .font(.system(size: 15))
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            
+            // Bouton Rejoindre
+            Button(action: {
+                withAnimation(.smooth(duration: 0.35)) {
+                    viewModel.chooseRole(.agent)
+                }
+            }) {
+                HStack(spacing: 6) {
+                    Text("Rejoindre Store Immo")
+                        .font(.system(size: 16, weight: .semibold))
+                    
+                    Image(systemName: "arrow.right")
+                        .font(.system(size: 13, weight: .semibold))
+                }
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .frame(height: 46)
+                .background(StoreImmoTheme.navy)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .shadow(color: StoreImmoTheme.navy.opacity(0.2), radius: 8, y: 3)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 14)
+        .padding(.horizontal, 16)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color(.secondarySystemBackground))
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.03), radius: 6, y: 2)
+    }
+}
+
+// MARK: - Agent Detail View
+
+/// Vue détail agent reprenant le style cohérent de l'application
+private struct ProfessionalsAgentDetailView: View {
     let agent: AgentProfile
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 26) {
-                    // Agent header avec photo
-                    HStack(alignment: .top, spacing: 18) {
-                        // Photo
-                        if let photoURL = agent.profilePhotoURL, let url = URL(string: photoURL) {
-                            AsyncImage(url: url) { phase in
-                                switch phase {
-                                case .success(let image):
-                                    image
-                                        .resizable()
-                                        .scaledToFill()
-                                        .frame(width: 90, height: 90)
-                                        .clipShape(Circle())
-                                        .overlay {
-                                            Circle()
-                                                .strokeBorder(Color.purple.opacity(0.3), lineWidth: 3)
-                                        }
-                                default:
-                                    agentPlaceholder(size: 90)
-                                }
-                            }
-                        } else {
-                            agentPlaceholder(size: 90)
+                VStack(alignment: .leading, spacing: 24) {
+                    // Photo de profil compacte en haut
+                    if !agent.profilePhotoURL.isNilOrEmpty {
+                        HStack {
+                            Spacer()
+                            agentPhotoSection
+                            Spacer()
                         }
-                        
-                        // Info
+                        .padding(.top, 20)
+                        .padding(.bottom, 8)
+                    }
+                    
+                    // Informations principales
+                    VStack(alignment: .leading, spacing: 20) {
+                        // Nom et agence
                         VStack(alignment: .leading, spacing: 8) {
                             Text(agent.fullName)
                                 .font(.title2.bold())
@@ -307,121 +405,142 @@ private struct PublicAgentDetailModernView: View {
                             
                             if !agent.agencyName.isEmpty {
                                 Text(agent.agencyName)
-                                    .font(.subheadline.weight(.medium))
-                                    .foregroundStyle(.secondary)
-                            } else {
-                                Text("Agent indépendant")
-                                    .font(.subheadline.weight(.medium))
+                                    .font(.title3)
                                     .foregroundStyle(.secondary)
                             }
                             
+                            // Badge vérification
                             if !agent.badge.title.isEmpty {
                                 Text(agent.badge.title)
-                                    .font(.caption.weight(.bold))
+                                    .font(.subheadline.weight(.bold))
                                     .foregroundStyle(.white)
                                     .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background(
-                                        LinearGradient(
-                                            colors: [Color.purple, Color.purple.opacity(0.8)],
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        ),
-                                        in: .capsule
-                                    )
+                                    .padding(.vertical, 7)
+                                    .background(StoreImmoTheme.navy, in: .capsule)
                             }
                         }
                         
-                        Spacer()
-                    }
-                    .padding(.bottom, 8)
-                    
-                    Divider()
-                    
-                    // Bio
-                    if !agent.bio.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Label("Présentation", systemImage: "person.text.rectangle.fill")
-                                .font(.headline)
-                                .foregroundStyle(Color.purple)
-                            Text(agent.bio)
-                                .font(.body)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
+                        Divider()
+                        
+                        // Bio
+                        if !agent.bio.isEmpty {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("Présentation")
+                                    .font(.headline)
+                                Text(agent.bio)
+                                    .font(.body)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
-                    }
-                    
-                    // Intervention zones
-                    if !agent.interventionZones.isEmpty {
-                        VStack(alignment: .leading, spacing: 14) {
-                            Label("Zones d'intervention", systemImage: "map.fill")
-                                .font(.headline)
-                                .foregroundStyle(Color.purple)
-                            
-                            ForEach(agent.interventionZones.prefix(6)) { zone in
-                                HStack(spacing: 10) {
-                                    Image(systemName: "mappin.circle.fill")
-                                        .foregroundStyle(Color.purple)
-                                    Text(zone.city)
-                                        .font(.subheadline.weight(.medium))
-                                    Spacer()
-                                    Text("\(zone.radiusKilometers) km")
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(.secondary)
-                                        .padding(.horizontal, 8)
-                                        .padding(.vertical, 4)
-                                        .background(Color(.tertiarySystemBackground), in: .capsule)
+                        
+                        // Statistiques si disponibles
+                        if agent.reviewCount > 0 || agent.salesLast12Months > 0 {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text("Activité")
+                                    .font(.headline)
+                                
+                                VStack(alignment: .leading, spacing: 12) {
+                                    if agent.averageRating > 0 && agent.reviewCount > 0 {
+                                        HStack(spacing: 8) {
+                                            Image(systemName: "star.fill")
+                                                .foregroundStyle(.orange)
+                                            Text("\(String(format: "%.1f", agent.averageRating))/5")
+                                                .font(.subheadline.weight(.medium))
+                                            Text("(\(agent.reviewCount) avis)")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                    
+                                    if agent.salesLast12Months > 0 {
+                                        HStack(spacing: 8) {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .foregroundStyle(.green)
+                                            Text("\(agent.salesLast12Months) ventes")
+                                                .font(.subheadline.weight(.medium))
+                                            Text("12 derniers mois")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
+                                    
+                                    if agent.soldRate > 0 {
+                                        HStack(spacing: 8) {
+                                            Image(systemName: "chart.line.uptrend.xyaxis")
+                                                .foregroundStyle(.blue)
+                                            Text("\(agent.soldRate)%")
+                                                .font(.subheadline.weight(.medium))
+                                            Text("taux de réussite")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                    }
                                 }
-                                .padding(.vertical, 4)
                             }
                         }
-                        .padding(.vertical, 8)
-                    }
-                    
-                    // Trust indicators
-                    VStack(alignment: .leading, spacing: 14) {
-                        Label("Informations", systemImage: "checkmark.seal.fill")
-                            .font(.headline)
-                            .foregroundStyle(Color.purple)
                         
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack(spacing: 10) {
-                                Image(systemName: "calendar.circle.fill")
-                                    .font(.title3)
-                                    .foregroundStyle(Color.purple)
-                                Text(agent.trustIndicators.memberSince)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
-                            
-                            HStack(spacing: 10) {
-                                Image(systemName: "clock.fill")
-                                    .font(.title3)
-                                    .foregroundStyle(Color.purple)
-                                Text(agent.trustIndicators.responseTime)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
-                            
-                            HStack(spacing: 10) {
-                                Image(systemName: "bolt.circle.fill")
-                                    .font(.title3)
-                                    .foregroundStyle(Color.purple)
-                                Text(agent.trustIndicators.recentActivity)
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
+                        // Zones d'intervention
+                        if !agent.interventionZones.isEmpty {
+                            VStack(alignment: .leading, spacing: 14) {
+                                Text("Zones d'intervention")
+                                    .font(.headline)
+                                
+                                ForEach(agent.interventionZones.prefix(5)) { zone in
+                                    HStack(spacing: 10) {
+                                        Image(systemName: "mappin.circle.fill")
+                                            .foregroundStyle(StoreImmoTheme.navy)
+                                        Text(zone.city)
+                                            .font(.subheadline.weight(.medium))
+                                        Spacer()
+                                        if zone.radiusKilometers > 0 {
+                                            Text("\(zone.radiusKilometers) km")
+                                                .font(.caption.weight(.semibold))
+                                                .foregroundStyle(.secondary)
+                                                .padding(.horizontal, 8)
+                                                .padding(.vertical, 4)
+                                                .background(Color(.tertiarySystemBackground), in: .capsule)
+                                        }
+                                    }
+                                }
                             }
                         }
-                        .padding(14)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(.tertiarySystemBackground), in: .rect(cornerRadius: 14))
+                        
+                        // Informations complémentaires
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text("Informations")
+                                .font(.headline)
+                            
+                            VStack(alignment: .leading, spacing: 12) {
+                                if let memberDate = agent.memberSinceDate {
+                                    HStack(spacing: 10) {
+                                        Image(systemName: "calendar.circle.fill")
+                                            .font(.title3)
+                                            .foregroundStyle(StoreImmoTheme.navy)
+                                        Text("Membre depuis \(memberDate.formatted(date: .abbreviated, time: .omitted))")
+                                            .font(.subheadline)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                
+                                HStack(spacing: 10) {
+                                    Image(systemName: agent.plan.iconName)
+                                        .font(.title3)
+                                        .foregroundStyle(StoreImmoTheme.navy)
+                                    Text("Plan \(agent.plan.title)")
+                                        .font(.subheadline)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            .padding(14)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color(.tertiarySystemBackground), in: .rect(cornerRadius: 14))
+                        }
                     }
+                    .padding(.horizontal, 20)
                     
                     Spacer(minLength: 40)
                 }
-                .padding(22)
             }
-            .background(Color(.systemGroupedBackground))
             .navigationTitle("Profil agent")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -438,21 +557,39 @@ private struct PublicAgentDetailModernView: View {
         }
     }
     
-    private func agentPlaceholder(size: CGFloat) -> some View {
-        Circle()
-            .fill(
-                LinearGradient(
-                    colors: [Color.purple, Color.purple.opacity(0.75)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .frame(width: size, height: size)
-            .overlay {
-                Image(systemName: agent.photoSymbol)
-                    .font(.system(size: size * 0.5))
-                    .foregroundStyle(.white.opacity(0.9))
+    @ViewBuilder
+    private var agentPhotoSection: some View {
+        if let photoURL = agent.profilePhotoURL, let url = URL(string: photoURL) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 100, height: 100)
+                        .clipShape(Circle())
+                        .overlay {
+                            Circle()
+                                .strokeBorder(Color.primary.opacity(0.1), lineWidth: 1)
+                        }
+                default:
+                    Circle()
+                        .fill(Color(.systemGray5))
+                        .frame(width: 100, height: 100)
+                        .overlay {
+                            Image(systemName: "person.crop.circle.fill")
+                                .font(.system(size: 45))
+                                .foregroundStyle(.secondary.opacity(0.5))
+                        }
+                }
             }
+        }
+    }
+}
+
+private extension Optional where Wrapped == String {
+    var isNilOrEmpty: Bool {
+        self?.isEmpty ?? true
     }
 }
 

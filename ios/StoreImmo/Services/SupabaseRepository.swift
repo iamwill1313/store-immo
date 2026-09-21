@@ -191,6 +191,28 @@ nonisolated struct NotificationFetchRow: Codable, Sendable {
     let related_conversation_id: String?
 }
 
+nonisolated struct NewsSeriesRow: Codable, Sendable {
+    let id: String
+    let title: String
+    let week_start: String
+    let week_end: String
+    let is_active: Bool
+    let created_at: String?
+}
+
+nonisolated struct NewsArticleRow: Codable, Sendable {
+    let id: String
+    let series_id: String
+    let title: String
+    let summary: String
+    let category: String
+    let source_name: String
+    let source_url: String
+    let published_at: String?
+    let created_at: String?
+    let content_hash: String
+}
+
 // MARK: - Repository
 
 @Observable
@@ -1514,6 +1536,98 @@ final class SupabaseRepository {
             print("🚨 fetchSupportTickets erreur:", error)
             return []
         }
+    }
+
+    // MARK: - News (Phase 2 validation du flux Swift ↔ Supabase)
+
+    /// Fetches the single news series currently marked `is_active = true`.
+    func fetchActiveNewsSeries() async -> NewsSeries? {
+        guard isConfigured, let client = service.client else { return nil }
+        do {
+            let rows: [NewsSeriesRow] = try await client
+                .from("news_series")
+                .select()
+                .eq("is_active", value: true)
+                .limit(1)
+                .execute()
+                .value
+
+            guard let row = rows.first else { return nil }
+
+            let dayFormatter = DateFormatter()
+            dayFormatter.dateFormat = "yyyy-MM-dd"
+            dayFormatter.locale = Locale(identifier: "en_US_POSIX")
+
+            guard let id = UUID(uuidString: row.id),
+                  let weekStart = dayFormatter.date(from: row.week_start),
+                  let weekEnd = dayFormatter.date(from: row.week_end),
+                  let createdAt = row.created_at.flatMap(Self.parseNewsTimestamp) else {
+                print("🚨 fetchActiveNewsSeries — décodage échoué pour la série:", row.id)
+                return nil
+            }
+
+            return NewsSeries(
+                id: id,
+                title: row.title,
+                weekStart: weekStart,
+                weekEnd: weekEnd,
+                isActive: row.is_active,
+                createdAt: createdAt
+            )
+        } catch {
+            print("🚨 fetchActiveNewsSeries erreur:", error)
+            lastError = error.localizedDescription
+            return nil
+        }
+    }
+
+    /// Fetches the articles belonging to a series, most recently published first.
+    func fetchNewsArticles(forSeriesID seriesID: UUID) async -> [NewsArticle] {
+        guard isConfigured, let client = service.client else { return [] }
+        do {
+            let rows: [NewsArticleRow] = try await client
+                .from("news_articles")
+                .select()
+                .eq("series_id", value: seriesID.uuidString.lowercased())
+                .order("published_at", ascending: false)
+                .execute()
+                .value
+
+            return rows.compactMap { row in
+                guard let id = UUID(uuidString: row.id),
+                      let rowSeriesID = UUID(uuidString: row.series_id),
+                      let sourceURL = URL(string: row.source_url),
+                      let createdAt = row.created_at.flatMap(Self.parseNewsTimestamp) else {
+                    print("🚨 fetchNewsArticles — décodage échoué pour l'article:", row.id)
+                    return nil
+                }
+
+                return NewsArticle(
+                    id: id,
+                    seriesId: rowSeriesID,
+                    title: row.title,
+                    summary: row.summary,
+                    category: row.category,
+                    sourceName: row.source_name,
+                    sourceURL: sourceURL,
+                    publishedAt: row.published_at.flatMap(Self.parseNewsTimestamp),
+                    createdAt: createdAt,
+                    contentHash: row.content_hash
+                )
+            }
+        } catch {
+            print("🚨 fetchNewsArticles erreur:", error)
+            lastError = error.localizedDescription
+            return []
+        }
+    }
+
+    /// Parses a Postgres `timestamptz` string, tolerant to fractional seconds.
+    private static func parseNewsTimestamp(_ string: String) -> Date? {
+        let withFractional = ISO8601DateFormatter()
+        withFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = withFractional.date(from: string) { return date }
+        return ISO8601DateFormatter().date(from: string)
     }
 }
 
